@@ -27,6 +27,7 @@ third_party/
 ml/training/outputs/checkpoints/
 ml/training/outputs/manifests/
 ml/training/outputs/cache/
+ml/training/outputs/exported/
 reports/metrics/*.json
 reports/metrics/*.csv
 reports/charts/*.png
