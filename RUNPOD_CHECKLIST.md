@@ -3,6 +3,7 @@
 Recommended template:
 
 - `ghcr.io/ai-dock/jupyter-pytorch:2.2.1-py3.10-cuda-11.8.0-runtime-22.04`
+- Keep `INSTALL_API_DEPS=0` unless you explicitly install Node and npm on the pod.
 
 ## Pod shape
 

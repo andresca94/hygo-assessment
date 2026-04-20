@@ -23,6 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prepare-dirs", action="store_true")
     parser.add_argument("--clone-repos", action="store_true")
     parser.add_argument("--download-public", action="store_true")
+    parser.add_argument("--include-optional", action="store_true")
     parser.add_argument("--prewarm-dinov2", action="store_true")
     return parser
 
@@ -117,7 +118,10 @@ def main() -> None:
         if args.clone_repos:
             clone_repo(repo_config["clone_url"], local_dir)
             if repo_config.get("install_editable"):
-                install_editable(local_dir)
+                try:
+                    install_editable(local_dir)
+                except subprocess.CalledProcessError as exc:
+                    print(f"[warning] Failed to install editable repo {name}: {exc}")
 
     for name, asset_config in config.get("assets", {}).items():
         manifest["assets"][name] = dict(asset_config)
@@ -147,6 +151,8 @@ def main() -> None:
                 ensure_dir(resolve_workspace_path(asset_config["local_path"], root_dir).parent)
 
         if args.download_public:
+            if not args.include_optional and not asset_config.get("required_for_trial", False):
+                continue
             asset_type = asset_config["asset_type"]
             if asset_type == "huggingface_snapshot":
                 download_hf_snapshot(asset_config["repo_id"], resolve_workspace_path(asset_config["local_dir"], root_dir))

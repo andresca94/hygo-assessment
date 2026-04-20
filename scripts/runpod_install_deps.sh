@@ -46,8 +46,13 @@ echo "[deps] Installing inference dependencies"
 "$PYTHON_BIN" -m pip install -r "$INFER_REQ_FILE"
 
 if [[ "${INSTALL_API_DEPS:-0}" == "1" ]]; then
-  echo "[deps] Installing NestJS dependencies"
-  (cd api/nestjs-service && npm install)
+  if command -v npm >/dev/null 2>&1; then
+    echo "[deps] Installing NestJS dependencies"
+    (cd api/nestjs-service && npm install)
+  else
+    echo "[deps] npm is not available on this image; skipping NestJS dependency install"
+    echo "[deps] You can still train now and install API dependencies later in a Node-capable environment"
+  fi
 else
   echo "[deps] Skipping npm install because INSTALL_API_DEPS is not enabled"
 fi

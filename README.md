@@ -70,6 +70,7 @@ Recommended template:
 - `ghcr.io/ai-dock/jupyter-pytorch:2.2.1-py3.10-cuda-11.8.0-runtime-22.04`
 - Set `JUPYTER_PASSWORD` before startup.
 - Ensure the pod `WORKSPACE` env var matches the actual mounted workspace path.
+- Leave `INSTALL_API_DEPS=0` on this image unless you install Node and npm yourself.
 
 Inside the pod:
 

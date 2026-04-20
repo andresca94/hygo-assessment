@@ -7,7 +7,7 @@ repos:
   mivolo:
     clone_url: https://github.com/WildChlamydia/MiVOLO.git
     local_dir: third_party/MiVOLO
-    install_editable: true
+    install_editable: false
     required_for_trial: true
   insightface:
     clone_url: https://github.com/deepinsight/insightface.git
