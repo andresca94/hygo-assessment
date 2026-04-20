@@ -42,6 +42,17 @@ For the current proof-of-concept run, the fastest reproducible trained baseline 
 
 On April 20, 2026, I also ran a `UTKFace + FairFace` ablation. That experiment improved precision but reduced minor recall and increased the false-negative rate in the dangerous `13-17` slice. Because this task is safety-critical, I rejected that checkpoint as the final shipped candidate and kept the `FairFace` baseline as the recommended deployment model.
 
+How the shipped data is processed and verified:
+
+- `prepare_fairface.py` normalizes the official FairFace CSVs into a single manifest schema with image path, demographic attributes, and age-derived targets.
+- the ambiguous FairFace `10-19` label is explicitly downgraded from supervised training by setting `age_bucket=unknown`, `minor_label=None`, and `label_status=ambiguous`; that keeps the most legally sensitive ambiguous range out of the trusted supervised split instead of pretending it is a clean label
+- `prepare_utkface.py` parses UTKFace filename metadata into explicit age, gender, and race fields for the ablation path
+- `prepare_nonreal_eval.py` assigns non-real images to robustness-only manifests with `age_bucket=unknown` and `minor_label=None`, so synthetic/cartoon data is not silently treated as exact age ground truth
+- `deduplicate.py` removes exact and simple perceptual duplicates using file MD5 plus average-hash checks
+- `split_dataset.py` stratifies supervised rows by `domain_type x age_bucket` so train, validation, and test splits preserve the age structure that matters to safety
+
+In other words, label-quality handling in this repo is conservative by design: ambiguous ranges are downgraded, non-real data is kept out of exact-age supervision, and the final shipped checkpoint only relies on the cleanest reproducible subset.
+
 ## Model choices
 
 Preferred architecture:
@@ -70,6 +81,79 @@ The production-oriented asset path is:
 - official DINOv2 loading via PyTorch Hub with an optional local repo clone
 - InsightFace `buffalo_l` loaded from a local root to avoid unexpected runtime downloads on pods
 
+Model internals in the shipped checkpoint:
+
+- main model:
+  - `timm.create_model("tf_efficientnet_b0", pretrained=True, num_classes=0, global_pool="avg")`
+  - `LayerNorm`
+  - `Dropout(0.2)`
+  - three linear heads for scalar age regression, age-bucket classification, and binary minor-risk scoring
+- auxiliary model:
+  - `dinov2_vits14_reg` backbone loaded through PyTorch Hub
+  - encoder frozen for the shipped run to keep training stable on a small dataset
+  - lightweight MLP head: `LayerNorm -> Dropout -> Linear -> GELU -> Dropout`
+  - three outputs: minor-risk logit, domain logits, and uncertainty logit
+
+This architecture was chosen because it separates two different jobs:
+
+- the main model estimates age-like signals on real photographic faces
+- the auxiliary model estimates whether the input looks off-distribution or unreliable
+
+That separation is more defensible for a safety system than trying to make a single classifier solve age estimation, domain detection, and uncertainty all at once.
+
+## Training strategy
+
+The training pipeline is intentionally simple, auditable, and recall-first.
+
+Main model strategy:
+
+- image preprocessing:
+  - resize to `224x224`
+  - random horizontal flip during training
+  - light color jitter during training
+  - ImageNet normalization
+- objective:
+  - `0.4 * SmoothL1(age regression)`
+  - `0.3 * cross_entropy(age bucket)`
+  - `0.3 * BCEWithLogits(minor label)`
+- hard-case weighting:
+  - rows with ages in the `15-21` boundary band receive a `2x` weight
+  - rows with additional quality flags are also upweighted so the model does not only optimize on clean easy faces
+- optimizer and schedule:
+  - `AdamW`
+  - learning rate `3e-4`
+  - weight decay `1e-4`
+  - `6` epochs in the shipped config
+  - gradient accumulation `2`
+  - mixed precision on CUDA
+- checkpoint selection:
+  - choose the best checkpoint by validation `minor_recall`
+  - break ties with lower validation loss
+
+Auxiliary model strategy:
+
+- freeze the `DINOv2` backbone and train only the small head
+- optimize a weighted multi-task objective:
+  - `0.45 * BCEWithLogits(minor label)`
+  - `0.35 * cross_entropy(domain class)`
+  - `0.20 * BCEWithLogits(uncertainty target)`
+- derive the uncertainty target from image quality: lower-quality rows receive higher uncertainty supervision
+- again, select the exported checkpoint by validation `minor_recall`, with loss as the tie-breaker
+
+Calibration strategy:
+
+- run full validation inference first
+- fit a single temperature scaler on raw validation minor logits using `LBFGS`
+- export `calibration.json`
+- use the calibrated score for the policy engine rather than the raw logit
+
+Why this training approach:
+
+- it keeps the main age model focused on the in-domain real-photo problem
+- it avoids pretending synthetic/cartoon images have clean legal-age labels
+- it makes calibration and policy tuning tractable
+- it optimizes directly for the failure mode that matters most here: missing minors
+
 ## Threshold decisions
 
 Suggested defaults for the shipped baseline:
@@ -89,6 +173,41 @@ How to interpret the shipped metrics:
 - `verdict_counts` are policy outcomes, not direct classifier outputs
 
 The `UTKFace` ablation made this tradeoff explicit: it improved `minor_precision` but worsened `minor_recall` and produced unsafe behavior in teenage slices unless the adult-safe gate was tightened so aggressively that `safe` throughput collapsed. That is the reason it remains an ablation rather than the final policy target.
+
+## Evaluation harness
+
+The evaluation harness is built to answer the specific questions in the brief, not just to produce a single score.
+
+For each split, the repo saves:
+
+- `*_predictions.csv` with per-image scores, intervals, conflicts, verdicts, and reasons
+- `*_metrics.json` with headline metrics
+- `*_slice_metrics.csv` for age/domain slices
+- `*_subgroup_metrics.csv` for demographic slices
+- reliability CSV/PNG outputs for calibration
+- confusion matrices
+- failure-analysis CSVs
+
+That gives a reviewer enough evidence to inspect:
+
+- binary safety metrics such as `minor_recall` and `minor_false_negative_rate`
+- confidence calibration
+- demographic behavior
+- robustness behavior under domain shift
+- concrete failure rows rather than only aggregate numbers
+
+What the shipped results show:
+
+- on held-out real-photo FairFace data, the model has strong score separation and high minor recall
+- on robustness data, the system mostly abstains rather than returning `safe`
+- the subgroup report is useful, but limited by the fact that shipped FairFace minors are concentrated in `0-12`
+
+Important limitation I would call out explicitly in review:
+
+- the auxiliary domain head is not strong enough to perfectly classify AI/cartoon inputs by domain label
+- the shipped robustness posture comes mostly from conservative safe-gating, conflict, and uncertainty handling, not from a perfect domain classifier
+
+That limitation is acceptable for this proof of concept because the system abstains safely, but it is exactly the kind of thing I would strengthen before a real production rollout.
 
 ## Bias analysis
 
@@ -161,17 +280,54 @@ Global accuracy is not the primary objective. The important analysis happens on:
 
 Recommended platform integration:
 
-- profile photo upload: synchronous call, accept only `safe`, reject `flagged`, ask for replacement or manual review on `uncertain`
-- training photo upload batch: asynchronous batch check with per-image results and a batch-level summary
-- generated image delivery: check before the image is returned to the user, block on `flagged`, hold or discard on `uncertain` depending on product policy
-- public gallery publish: run another check before publish, even if the image was screened earlier
+User uploads a profile photo:
+
+- make this a synchronous call
+- accept only `safe`
+- reject `flagged`
+- ask for replacement or route to manual review on `uncertain`
+
+User uploads 30 training photos:
+
+- process this asynchronously as a batch job
+- return per-image results plus a batch summary
+- block model training if any image is `flagged`
+- require cleanup or manual review if the batch has too many `uncertain` rows
+
+GPU cluster finishes generating an image:
+
+- screen the generated image before delivery to the user
+- block on `flagged`
+- hold, discard, or send to review on `uncertain` depending on product policy and latency budget
+
+User publishes to a public gallery:
+
+- run another check before publish instead of trusting an earlier result forever
+- this catches policy changes, post-processing, or missed moderation on previously generated assets
 
 Edge cases:
 
-- no face detected: return `uncertain`
-- multiple faces: evaluate every face and use the highest-risk result at the image level
-- repeated `uncertain` or `flagged` outcomes: escalate to manual review, additional verification, or account-level friction depending on policy
-- retraining: collect confirmed false positives, dangerous misses, repeated `uncertain` cases, and new domain-shift examples for the next dataset iteration
+What happens when a photo is flagged:
+
+- block the action that triggered the check
+- ask for a different image
+- escalate repeated or high-risk events to manual review or additional identity/account verification
+
+What happens when no face is detected:
+
+- return `uncertain`
+- do not auto-approve a no-face image in a safety-sensitive workflow
+
+What happens when there are multiple faces:
+
+- evaluate every face
+- use the highest-risk face verdict as the image verdict
+
+How I would retrain or update the model:
+
+- collect confirmed false positives, dangerous misses, repeated `uncertain` cases, and new domain-shift examples
+- add stronger borderline-age review data around `16-21`
+- rerun calibration and subgroup reporting before shipping a new checkpoint
 
 ## Production concerns
 

@@ -50,6 +50,26 @@ In the shipped checkpoint, `MiVOLOAgeEstimator` uses a `timm` `tf_efficientnet_b
 
 This matters because the challenge is safety-critical. The production decision is not “what is the argmax class,” it is “do we have enough evidence to safely approve this image?”
 
+### Shipped training strategy
+
+The shipped checkpoint is trained in two stages:
+
+1. Main model training on `FairFace`
+   - resize to `224x224`, light augmentation, ImageNet normalization
+   - `tf_efficientnet_b0` backbone with three heads: age regression, age-bucket classification, and minor-risk
+   - weighted multi-task loss:
+     - `0.4 * SmoothL1(age)`
+     - `0.3 * cross_entropy(age bucket)`
+     - `0.3 * BCEWithLogits(minor label)`
+   - hard-case upweighting for the `15-21` boundary region and rows with quality issues
+   - best checkpoint selected by validation `minor_recall`, with validation loss as the tie-breaker
+2. Auxiliary model training
+   - frozen `DINOv2` encoder with a small MLP head
+   - predicts auxiliary minor-risk, domain class, and uncertainty
+   - trained with a weighted multi-task objective over minor label, domain label, and quality-derived uncertainty
+
+After validation inference, the pipeline fits a temperature scaler on raw validation logits and exports `calibration.json`. The policy layer then uses the calibrated `p_minor` score, the age interval, conflict score, face quality, and domain cues to emit `safe`, `flagged`, or `uncertain`.
+
 ## Repository Layout
 
 ```text
@@ -545,4 +565,14 @@ exports/<model_version>_inference_bundle.tar.gz
 
 - Dataset and provenance rationale: [`DATA_CARD.md`](DATA_CARD.md)
 - System and policy rationale: [`DECISIONS.md`](DECISIONS.md)
+- Assessment-question coverage in `DECISIONS.md`:
+  - dataset choices and rejected alternatives
+  - model architecture and training strategy
+  - threshold decisions
+  - evaluation harness, calibration, and failure analysis
+  - bias analysis
+  - real vs generated images
+  - integration design for each platform touchpoint
+  - production concerns
+  - what I would do with more time
 - Pod bootstrap checklist: [`RUNPOD_CHECKLIST.md`](RUNPOD_CHECKLIST.md)
