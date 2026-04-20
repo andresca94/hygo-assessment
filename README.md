@@ -529,36 +529,21 @@ See:
 - [`ml/training/configs/model_assets.yaml`](ml/training/configs/model_assets.yaml)
 - [`RUNPOD_CHECKLIST.md`](RUNPOD_CHECKLIST.md)
 
-## Reviewer Handoff
+## Optional Packaging
 
-After training on RunPod you have two clean submission options.
+The normal submission path is to use this repository directly: the shipped baseline weights are already present under `ml/training/outputs/exported`, so reviewers do not need an extra handoff archive to boot inference.
 
-### Option A: submit with weights included
+The packaging scripts are only needed if you want to export a separate standalone bundle from a RunPod training run:
 
 ```bash
 bash scripts/runpod_export_artifacts.sh
 INCLUDE_WEIGHTS=1 bash scripts/prepare_submission_bundle.sh
 ```
 
-This creates a submission archive that already contains `ml/training/outputs/exported`.
-
-### Option B: submit without weights, but with a one-step install path
-
-```bash
-bash scripts/runpod_export_artifacts.sh
-INCLUDE_WEIGHTS=0 bash scripts/prepare_submission_bundle.sh
-```
-
-Then the reviewer can run:
+If you intentionally export a bundle without weights, the receiving machine can install the exported inference bundle with:
 
 ```bash
 bash scripts/install_inference_bundle.sh <bundle.tar.gz-or-url>
-```
-
-The exported inference bundle produced by training is:
-
-```text
-exports/<model_version>_inference_bundle.tar.gz
 ```
 
 ## Documentation
