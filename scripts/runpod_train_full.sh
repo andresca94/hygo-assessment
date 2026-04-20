@@ -15,8 +15,17 @@ CONFIG_PATH="${CONFIG_PATH:-ml/training/configs/runpod_4090.yaml}"
 RAW_DATA_DIR="${RAW_DATA_DIR:-$ROOT_DIR/data/raw}"
 PROCESSED_DATA_DIR="${PROCESSED_DATA_DIR:-$ROOT_DIR/data/processed}"
 MASTER_MANIFEST="${MASTER_MANIFEST:-$ROOT_DIR/ml/training/outputs/manifests/master_manifest.csv}"
+ENABLE_UTKFACE="${ENABLE_UTKFACE:-1}"
+ENABLE_FAIRFACE="${ENABLE_FAIRFACE:-1}"
+ENABLE_APPA_REAL="${ENABLE_APPA_REAL:-1}"
+ENABLE_NONREAL_EVAL="${ENABLE_NONREAL_EVAL:-1}"
 
 mkdir -p "$RAW_DATA_DIR" "$PROCESSED_DATA_DIR" "$(dirname "$MASTER_MANIFEST")" logs
+
+write_empty_manifest() {
+  local output_path="$1"
+  python ml/training/scripts/write_empty_manifest.py --output "$output_path"
+}
 
 echo "[runpod] Preparing external assets"
 bash scripts/runpod_prepare_assets.sh
@@ -36,10 +45,33 @@ python ml/training/scripts/validate_dataset_sources.py \
   --raw-root "$RAW_DATA_DIR"
 
 echo "[runpod] Preparing datasets"
-python ml/training/scripts/prepare_utkface.py --raw-dir "$RAW_DATA_DIR/utkface" --output-dir "$PROCESSED_DATA_DIR/utkface"
-python ml/training/scripts/prepare_fairface.py --raw-dir "$RAW_DATA_DIR/fairface" --output-dir "$PROCESSED_DATA_DIR/fairface"
-python ml/training/scripts/prepare_appa_real.py --raw-dir "$RAW_DATA_DIR/appa_real" --output-dir "$PROCESSED_DATA_DIR/appa_real"
-python ml/training/scripts/prepare_nonreal_eval.py --raw-dir "$RAW_DATA_DIR/nonreal" --output-dir "$PROCESSED_DATA_DIR/nonreal"
+if [[ "$ENABLE_UTKFACE" == "1" ]]; then
+  python ml/training/scripts/prepare_utkface.py --raw-dir "$RAW_DATA_DIR/utkface" --output-dir "$PROCESSED_DATA_DIR/utkface"
+else
+  echo "[runpod] Skipping UTKFace preparation"
+  write_empty_manifest "$PROCESSED_DATA_DIR/utkface/manifest.csv"
+fi
+
+if [[ "$ENABLE_FAIRFACE" == "1" ]]; then
+  python ml/training/scripts/prepare_fairface.py --raw-dir "$RAW_DATA_DIR/fairface" --output-dir "$PROCESSED_DATA_DIR/fairface"
+else
+  echo "[runpod] Skipping FairFace preparation"
+  write_empty_manifest "$PROCESSED_DATA_DIR/fairface/manifest.csv"
+fi
+
+if [[ "$ENABLE_APPA_REAL" == "1" ]]; then
+  python ml/training/scripts/prepare_appa_real.py --raw-dir "$RAW_DATA_DIR/appa_real" --output-dir "$PROCESSED_DATA_DIR/appa_real"
+else
+  echo "[runpod] Skipping APPA-REAL preparation"
+  write_empty_manifest "$PROCESSED_DATA_DIR/appa_real/manifest.csv"
+fi
+
+if [[ "$ENABLE_NONREAL_EVAL" == "1" ]]; then
+  python ml/training/scripts/prepare_nonreal_eval.py --raw-dir "$RAW_DATA_DIR/nonreal" --output-dir "$PROCESSED_DATA_DIR/nonreal"
+else
+  echo "[runpod] Skipping non-real robustness preparation"
+  write_empty_manifest "$PROCESSED_DATA_DIR/nonreal/manifest.csv"
+fi
 
 echo "[runpod] Building master manifest"
 python ml/training/scripts/split_dataset.py \

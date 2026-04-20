@@ -19,16 +19,15 @@ Recommended template:
 3. Set a `JUPYTER_PASSWORD` value in the pod template before startup.
 4. Ensure the pod `WORKSPACE` environment variable matches the actual mountpoint you are using for storage.
 5. Run `bash scripts/runpod_install_deps.sh`.
-6. For the fastest first run, stage FairFace automatically with `bash scripts/runpod_fetch_minimum_datasets.sh`.
-7. For a stronger second run, stage `UTKFace` automatically with `bash scripts/runpod_fetch_utkface_dataset.sh`.
-8. Run `bash scripts/runpod_prepare_assets.sh`.
-9. Review `ml/training/outputs/manifests/source_acquisition.md`.
-10. If you are not using the fetch helper, place or download the required datasets into `data/raw` under the repo root.
-11. Confirm the raw folders are not empty with `find data/raw -maxdepth 3 -type f | head -100`.
-12. Run `python ml/training/scripts/validate_dataset_sources.py --config ml/training/configs/datasets.yaml --raw-root data/raw`.
-13. Confirm free disk space with `df -h`.
-14. Confirm the GPU is visible with `nvidia-smi`.
-15. If you want the external MiVOLO V2 inference path, set `ENABLE_EXTERNAL_MIVOLO_HF=1` in `.env`.
+6. For the recommended final candidate, stage FairFace automatically with `bash scripts/runpod_fetch_minimum_datasets.sh`.
+7. Run `bash scripts/runpod_prepare_assets.sh`.
+8. Review `ml/training/outputs/manifests/source_acquisition.md`.
+9. If you are not using the fetch helper, place or download the required datasets into `data/raw` under the repo root.
+10. Confirm the raw folders are not empty with `find data/raw -maxdepth 3 -type f | head -100`.
+11. Run `python ml/training/scripts/validate_dataset_sources.py --config ml/training/configs/datasets.yaml --raw-root data/raw`.
+12. Confirm free disk space with `df -h`.
+13. Confirm the GPU is visible with `nvidia-smi`.
+14. If you want the external MiVOLO V2 inference path, set `ENABLE_EXTERNAL_MIVOLO_HF=1` in `.env`.
 
 ## AI-generated and cartoon coverage
 
@@ -67,16 +66,28 @@ and produces robustness predictions and slice reports using the trained checkpoi
 - `third_party/dinov2`
 - `third_party/MiVOLO`
 
-## Recommended first run
+## Recommended final candidate run
 
 ```bash
 cp .env.example .env
 bash scripts/runpod_install_deps.sh
 bash scripts/runpod_fetch_minimum_datasets.sh
-bash scripts/runpod_fetch_utkface_dataset.sh
-bash scripts/runpod_prepare_assets.sh
-bash scripts/runpod_train_full.sh
+bash scripts/runpod_train_recommended_submission.sh
+bash scripts/runpod_fetch_robustness_datasets.sh
+bash scripts/runpod_run_robustness_eval.sh
 ```
+
+## Optional UTKFace ablation
+
+If you want to reproduce the rejected `UTKFace` ablation for analysis only:
+
+```bash
+bash scripts/runpod_fetch_utkface_dataset.sh
+bash scripts/runpod_train_full.sh
+bash scripts/runpod_run_robustness_eval.sh
+```
+
+That ablation improved precision but worsened recall on minors, especially in the `13-17` slice, so it is not the recommended shipped checkpoint.
 
 If the validator reports zero primary supervision data, do not continue. Populate at least one of:
 

@@ -9,6 +9,8 @@ This repository contains a conservative, auditable age-safety proof of concept b
 
 The system is intentionally policy-driven and safety-first. It only returns `safe` when adult evidence is strong. Ambiguous, low-quality, stylized, synthetic, or conflicting cases are pushed to `uncertain`, and high-risk cases are returned as `flagged`.
 
+As of April 20, 2026, the recommended shipped checkpoint in this repo is the `FairFace`-only baseline, not the later `UTKFace` ablation. The `UTKFace` experiment improved precision but reduced minor recall in the `13-17` slice, so it is kept as an ablation rather than the final candidate.
+
 ## Architecture
 
 The intended production path is:
@@ -78,8 +80,9 @@ Inside the pod:
 cp .env.example .env
 bash scripts/runpod_install_deps.sh
 bash scripts/runpod_fetch_minimum_datasets.sh
-bash scripts/runpod_prepare_assets.sh
-bash scripts/runpod_train_full.sh
+bash scripts/runpod_train_recommended_submission.sh
+bash scripts/runpod_fetch_robustness_datasets.sh
+bash scripts/runpod_run_robustness_eval.sh
 ```
 
 Before `runpod_train_full.sh`, the training pod must already contain real files under `data/raw/...`. The script now fails fast if the raw dataset folders are empty or if the merged manifest cannot produce supervised `train`, `val`, and `test` rows.
@@ -151,13 +154,42 @@ bash scripts/runpod_fetch_minimum_datasets.sh
 
 That script downloads the official FairFace train/validation images and label CSVs from the official project links, stages them under `data/raw/fairface`, and reruns dataset validation.
 
-If you want a stronger second training run with additional real age supervision, stage `UTKFace` as well:
+If you want to reproduce the rejected `UTKFace` ablation for comparison, stage `UTKFace` as well:
 
 ```bash
 bash scripts/runpod_fetch_utkface_dataset.sh
 ```
 
-That helper downloads the official aligned-and-cropped `UTKFace` archive, extracts it under `data/raw/utkface`, and reruns dataset validation.
+That helper downloads the official aligned-and-cropped `UTKFace` archive, extracts it under `data/raw/utkface`, and reruns dataset validation. The current recommendation is not to use that checkpoint as the final shipped candidate unless you independently revalidate the safety tradeoff.
+
+## Current Recommendation
+
+Recommended final submission path:
+
+```bash
+cp .env.example .env
+bash scripts/runpod_install_deps.sh
+bash scripts/runpod_fetch_minimum_datasets.sh
+bash scripts/runpod_train_recommended_submission.sh
+bash scripts/runpod_fetch_robustness_datasets.sh
+bash scripts/runpod_run_robustness_eval.sh
+```
+
+Current recommended final candidate metrics from the `FairFace` baseline:
+
+- `minor_precision`: `0.8711`
+- `minor_recall`: `0.9737`
+- `minor_f1`: `0.9195`
+- `minor_false_negative_rate`: `0.0263`
+- `roc_auc`: `0.9959`
+- `pr_auc`: `0.9855`
+
+`UTKFace` ablation summary:
+
+- improved `minor_precision` to `0.9413`
+- reduced `minor_recall` to `0.9567`
+- increased `minor_false_negative_rate` to `0.0433`
+- degraded the critical `13-17` slice, so it is rejected as the final shipped checkpoint
 
 To add AI-generated and cartoon robustness coverage after the baseline run:
 

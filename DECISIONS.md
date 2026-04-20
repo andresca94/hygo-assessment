@@ -33,6 +33,8 @@ These non-real sources are intentionally not treated as the main source of exact
 
 For the current proof-of-concept run, the fastest reproducible trained baseline is `FairFace`. The pipeline already supports `UTKFace`, `APPA-REAL`, and the robustness datasets, but those are staged as the next iteration rather than being falsely claimed as already-trained sources.
 
+On April 20, 2026, I also ran a `UTKFace + FairFace` ablation. That experiment improved precision but reduced minor recall and increased the false-negative rate in the dangerous `13-17` slice. Because this task is safety-critical, I rejected that checkpoint as the final shipped candidate and kept the `FairFace` baseline as the recommended deployment model.
+
 ## Model choices
 
 Preferred architecture:
@@ -51,13 +53,15 @@ The production-oriented asset path is:
 
 ## Threshold decisions
 
-Suggested defaults:
+Suggested defaults for the shipped baseline:
 
 - `safe` if `p_minor < 0.05`, quality is acceptable, there is no strong model conflict, and the adult interval is clearly above 18
 - `flagged` if `p_minor >= 0.40` or the age estimate is close to or below the legal boundary
 - `uncertain` otherwise
 
 Thresholds should be tuned on validation slices, not on global accuracy. The explicit tradeoff is to accept more abstention and more false positives in exchange for reducing dangerous misses on minors.
+
+The `UTKFace` ablation made this tradeoff explicit: it improved `minor_precision` but worsened `minor_recall` and produced unsafe behavior in teenage slices unless the adult-safe gate was tightened so aggressively that `safe` throughput collapsed. That is the reason it remains an ablation rather than the final policy target.
 
 ## Bias analysis
 
@@ -72,7 +76,7 @@ Bias is evaluated primarily with `FairFace`, because it offers demographic attri
 Known constraints:
 
 - demographic labels in public datasets are imperfect and should not be treated as identity truth
-- the first proof-of-concept run may be stronger on demographic reporting than on cross-domain robustness if only `FairFace` is staged
+- the final shipped checkpoint is intentionally the `FairFace` baseline because the `UTKFace` ablation degraded recall in the most safety-sensitive slice
 - bias results should be reported as measured behavior, not as proof that the system is fair enough for fully autonomous enforcement
 
 ## Real vs generated images
@@ -142,7 +146,8 @@ Future production improvements:
 
 The next highest-value improvements would be:
 
-- add `UTKFace` and `APPA-REAL` into the trained baseline and rerun calibration
+- revisit `UTKFace` with stronger label audit, sample reweighting, or a borderline-age curriculum before promoting it into the shipped baseline
+- add `APPA-REAL` into the trained baseline and rerun calibration
 - add at least one synthetic robustness dataset such as `SFHQ-T2I` or `DeepFakeFace` into evaluation
 - build a stronger borderline-age audit slice around `16-21`
 - run a tighter demographic report from the completed evaluation artifacts and use it to retune thresholds
