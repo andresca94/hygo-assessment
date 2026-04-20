@@ -78,6 +78,18 @@ Known constraints:
 - demographic labels in public datasets are imperfect and should not be treated as identity truth
 - the final shipped checkpoint is intentionally the `FairFace` baseline because the `UTKFace` ablation degraded recall in the most safety-sensitive slice
 - bias results should be reported as measured behavior, not as proof that the system is fair enough for fully autonomous enforcement
+- in the shipped `FairFace` test split, labeled minors appear in the `0-12` bucket only, so the subgroup report does not by itself validate borderline `13-17` behavior
+
+Current shipped-checkpoint subgroup findings:
+
+- gender:
+  - `female` minor recall `0.9723`, minor false-negative rate `0.0277`
+  - `male` minor recall `0.9748`, minor false-negative rate `0.0252`
+- race:
+  - highest false-negative rates in the shipped test split were `latino_hispanic` (`0.0450`) and `indian` (`0.0419`)
+  - lowest false-negative rates were `southeast asian` (`0.0049`) and `east asian` (`0.0122`)
+
+These are not large enough subgroup counts to justify aggressive threshold changes by themselves, but they are large enough to justify explicit disclosure and continued monitoring.
 
 ## Real vs generated images
 
@@ -90,6 +102,14 @@ The strategy is:
 - prefer `uncertain` when the domain signal is unstable or the auxiliary model conflicts with the main model
 
 This is deliberate. Synthetic and stylized datasets often do not provide reliable legal-age labels, so forcing them into the main supervision pool would make the model look broader while actually reducing trustworthiness.
+
+For the shipped baseline, the robustness split produced:
+
+- `125,647` `uncertain`
+- `4,407` `flagged`
+- `0` `safe`
+
+That should be read as a conservative abstention result, not as a claim that the model accurately estimates age on synthetic or cartoon images.
 
 ## Evaluation philosophy
 

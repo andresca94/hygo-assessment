@@ -1,0 +1,4 @@
+source_domain_type,predicted_domain_type,age_bucket,count,mean_p_minor
+real,real,0-12,1367,0.9648427048532173
+real,real,21-25,2887,0.0714601594513988
+real,real,26+,4468,0.0191351826547862

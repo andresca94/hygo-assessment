@@ -47,6 +47,8 @@ Current repository decisions:
 
 ### 1. Local development with Docker Compose
 
+The repository now ships the recommended `FairFace` baseline checkpoint under `ml/training/outputs/exported`, so a clean clone can boot the API without retraining first.
+
 ```bash
 cp .env.example .env
 python ml/training/scripts/bootstrap_model_assets.py --config ml/training/configs/model_assets.yaml --emit-instructions --prepare-dirs
@@ -57,6 +59,19 @@ Services:
 
 - NestJS API: `http://localhost:3000`
 - Python inference service: `http://localhost:8000`
+
+Quick health check:
+
+```bash
+bash scripts/runpod_smoke_test.sh
+```
+
+Example single-image request:
+
+```bash
+curl -X POST http://127.0.0.1:3000/v1/age-safety/check \
+  -F "file=@/absolute/path/to/sample.jpg"
+```
 
 ### 2. RunPod RTX 4090 workflow
 
@@ -184,12 +199,58 @@ Current recommended final candidate metrics from the `FairFace` baseline:
 - `roc_auc`: `0.9959`
 - `pr_auc`: `0.9855`
 
+The shipped baseline weights used for local inference are included at:
+
+- `ml/training/outputs/exported/main_best.pt`
+- `ml/training/outputs/exported/aux_best.pt`
+- `ml/training/outputs/exported/calibration.json`
+- `ml/training/outputs/exported/policy.json`
+
+Current robustness summary for the shipped baseline:
+
+- `130,054` robustness rows
+- `125,647` `uncertain`
+- `4,407` `flagged`
+- `0` `safe`
+
+This is an intentional abstention posture, not a claim of strong cross-domain age accuracy. Under AI-generated and cartoon shift, the policy prefers `uncertain` over unsafe confidence.
+
+Current subgroup findings from `reports/metrics/test_subgroup_metrics.csv`:
+
+- gender:
+  - `female` minor recall `0.9723`, minor false-negative rate `0.0277`
+  - `male` minor recall `0.9748`, minor false-negative rate `0.0252`
+- race:
+  - highest false-negative rates in this shipped test split were `latino_hispanic` (`0.0450`) and `indian` (`0.0419`)
+  - lowest false-negative rates were `southeast asian` (`0.0049`) and `east asian` (`0.0122`)
+
+Important caveat:
+
+- the shipped `FairFace` test split only contains labeled minors in the `0-12` bucket
+- this means the demographic report is useful, but it does not by itself validate borderline `13-17` behavior
+- the rejected `UTKFace` ablation was kept specifically because it exposed worse recall in the `13-17` slice and informed the final model-selection decision
+
 `UTKFace` ablation summary:
 
 - improved `minor_precision` to `0.9413`
 - reduced `minor_recall` to `0.9567`
 - increased `minor_false_negative_rate` to `0.0433`
 - degraded the critical `13-17` slice, so it is rejected as the final shipped checkpoint
+
+## Final Results
+
+The final recommended submission model is the `FairFace` baseline, selected for safety rather than aggregate precision. It ships with:
+
+- strong in-domain real-photo performance on the held-out test split
+- conservative abstention on AI-generated and cartoon robustness inputs
+- explicit calibration artifacts and policy thresholds
+- demographic subgroup reporting over the shipped `FairFace` test split
+
+The main tradeoff is deliberate:
+
+- the system is optimized to reduce dangerous false negatives on minors
+- under domain shift it prefers `uncertain` over overconfident `safe`
+- the rejected `UTKFace` ablation showed why this mattered: higher precision, but worse recall in the `13-17` slice
 
 To add AI-generated and cartoon robustness coverage after the baseline run:
 
@@ -276,6 +337,13 @@ Public API endpoints:
 - `POST /v1/age-safety/check-batch`
 - `GET /v1/age-safety/health`
 
+Example request:
+
+```bash
+curl -X POST http://127.0.0.1:3000/v1/age-safety/check \
+  -F "file=@/absolute/path/to/sample.jpg"
+```
+
 Representative response:
 
 ```json
@@ -300,8 +368,9 @@ Representative response:
 
 ## Current Scope
 
-This repository is a production-oriented scaffold, not a claim that the final model is already trained. The code is structured so you can:
+This repository is a production-oriented scaffold that also ships a trained baseline checkpoint. The code is structured so you can:
 
+- run the included `FairFace` baseline immediately,
 - prepare and document datasets,
 - train incrementally,
 - calibrate thresholds,

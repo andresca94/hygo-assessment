@@ -65,6 +65,39 @@ def export_policy(config: dict, exported_dir: Path) -> None:
     (exported_dir / "policy.json").write_text(json.dumps(policy_payload, indent=2))
 
 
+def compute_group_metrics(frame: pd.DataFrame, group_columns: list[str], threshold: float = 0.5) -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    for keys, group in frame.groupby(group_columns, dropna=False):
+        if not isinstance(keys, tuple):
+            keys = (keys,)
+
+        y_true = group["minor_label"].astype(int)
+        y_score = group["p_minor"]
+        y_pred = (y_score >= threshold).astype(int)
+
+        tp = int(((y_pred == 1) & (y_true == 1)).sum())
+        fp = int(((y_pred == 1) & (y_true == 0)).sum())
+        fn = int(((y_pred == 0) & (y_true == 1)).sum())
+
+        row = {
+            "group_type": " x ".join(group_columns),
+            "group_value": " | ".join(str(value) for value in keys),
+            "count": int(len(group)),
+            "minor_count": int((y_true == 1).sum()),
+            "adult_count": int((y_true == 0).sum()),
+            "mean_p_minor": float(y_score.mean()),
+            "minor_precision": float(tp / max(tp + fp, 1)),
+            "minor_recall": float(tp / max(tp + fn, 1)),
+            "minor_f1": float((2 * tp) / max((2 * tp) + fp + fn, 1)),
+            "minor_false_negative_rate": float(fn / max(int((y_true == 1).sum()), 1)),
+        }
+        for column, value in zip(group_columns, keys):
+            row[column] = value
+        rows.append(row)
+
+    return pd.DataFrame(rows)
+
+
 def main() -> None:
     args = build_parser().parse_args()
     config = load_yaml(args.config)
@@ -187,6 +220,8 @@ def main() -> None:
                         "predicted_domain_type": predicted_domains[index],
                         "domain_type": predicted_domains[index],
                         "age_bucket": batch["age_bucket"][index],
+                        "gender": batch["gender"][index],
+                        "race": batch["race"][index],
                         "quality_flags": ",".join(quality_flags),
                         "estimated_age": estimated_age,
                         "age_interval_low": age_interval[0],
@@ -270,6 +305,16 @@ def main() -> None:
 
         failures = labeled[((labeled["minor_label"] == 1) & (y_pred == 0)) | ((labeled["minor_label"] == 0) & (y_pred == 1))]
         failures.to_csv(failure_dir / f"{args.split}_failures.csv", index=False)
+
+        subgroup_frames = [
+            compute_group_metrics(labeled, ["age_bucket"]),
+            compute_group_metrics(labeled, ["gender"]),
+            compute_group_metrics(labeled, ["race"]),
+            compute_group_metrics(labeled, ["gender", "age_bucket"]),
+            compute_group_metrics(labeled, ["race", "age_bucket"]),
+        ]
+        subgroup_metrics = pd.concat(subgroup_frames, ignore_index=True)
+        subgroup_metrics.to_csv(metrics_dir / f"{args.split}_subgroup_metrics.csv", index=False)
 
     slice_source = labeled if not labeled.empty else predictions
     slice_metrics = slice_source.groupby(["source_domain_type", "predicted_domain_type", "age_bucket"]).agg(

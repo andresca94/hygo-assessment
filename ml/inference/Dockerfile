@@ -6,6 +6,7 @@ ENV PIP_NO_CACHE_DIR=1
 WORKDIR /workspace
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     curl \
     libgl1 \
     libglib2.0-0 \

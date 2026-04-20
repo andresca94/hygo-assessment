@@ -1,0 +1,30 @@
+{
+  "split": "test",
+  "row_count": 8722,
+  "verdict_counts": {
+    "uncertain": 7527,
+    "flagged": 1195
+  },
+  "source_dataset_counts": {
+    "fairface": 8722
+  },
+  "source_domain_counts": {
+    "real": 8722
+  },
+  "predicted_domain_counts": {
+    "real": 8722
+  },
+  "policy_reason_counts": {
+    "boundary_or_quality_case": 6940,
+    "minor_risk": 1195,
+    "model_conflict": 587
+  },
+  "mean_p_minor": 0.18467569983628998,
+  "mean_uncertainty_score": 0.15081076887435144,
+  "minor_precision": 0.8710732984293194,
+  "minor_recall": 0.9736649597659107,
+  "minor_f1": 0.9195164075993092,
+  "roc_auc": 0.9959198490991651,
+  "pr_auc": 0.9855298915626063,
+  "minor_false_negative_rate": 0.026335040234089245
+}

@@ -1,0 +1,7 @@
+split,domain_type,count
+robustness,ai_generated,60000
+robustness,cartoon,60000
+robustness,real,10284
+test,real,8742
+train,real,69931
+val,real,8741

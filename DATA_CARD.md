@@ -34,6 +34,16 @@ The highest-risk false negatives are expected to concentrate in these slices:
 - `FairFace`
 - `APPA-REAL`
 
+## Shipped checkpoint data usage
+
+The final shipped checkpoint in this repository was trained on the `FairFace` baseline only.
+
+Additional dataset work in this repo should be read as:
+
+- `UTKFace`: implemented and evaluated as an ablation, but rejected as the final checkpoint because it reduced minor recall in the `13-17` slice
+- `APPA-REAL`: planned and scaffolded, but not part of the shipped checkpoint
+- non-real datasets: used for robustness evaluation and abstention analysis, not for the main supervised age labels in the shipped model
+
 ## Robustness-only sources
 
 - `SFHQ`
@@ -140,6 +150,7 @@ Sampling should oversample hard slices instead of maximizing raw volume.
 - mixed-source datasets such as `TrueFace` require an explicit provenance and split audit before promotion into trusted subsets
 - age labels in public datasets are not legal ground truth
 - demographic fields depend on source availability and should be treated cautiously
+- the shipped `FairFace` test split only includes labeled minors in the `0-12` bucket, so demographic subgroup analysis for the shipped checkpoint does not fully cover borderline `13-17` behavior
 
 ## Safety note
 

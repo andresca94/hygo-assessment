@@ -1,0 +1,32 @@
+{
+  "split": "robustness",
+  "row_count": 130054,
+  "verdict_counts": {
+    "uncertain": 125647,
+    "flagged": 4407
+  },
+  "source_dataset_counts": {
+    "deepfakeface": 60000,
+    "icartoonface": 59805,
+    "fairface": 10249
+  },
+  "source_domain_counts": {
+    "ai_generated": 60000,
+    "cartoon": 59805,
+    "real": 10249
+  },
+  "predicted_domain_counts": {
+    "real": 130037,
+    "unknown": 8,
+    "ai_generated": 6,
+    "anime": 2,
+    "edited": 1
+  },
+  "policy_reason_counts": {
+    "boundary_or_quality_case": 85648,
+    "model_conflict": 39999,
+    "minor_risk": 4407
+  },
+  "mean_p_minor": 0.23029732966956107,
+  "mean_uncertainty_score": 0.19276040330904337
+}

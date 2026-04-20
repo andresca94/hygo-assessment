@@ -31,7 +31,28 @@ class ManifestFaceDataset(Dataset):
 
         dataframe = dataframe[dataframe["image_path"].notna()].reset_index(drop=True)
         self.dataframe = dataframe
+        self.repo_root = Path(__file__).resolve().parents[3]
         self.transform = self._build_transform(image_size=image_size, train=train)
+
+    def _resolve_image_path(self, raw_path: str | Path) -> Path:
+        path = Path(raw_path)
+        if path.exists():
+            return path
+
+        known_prefixes = [
+            Path("/workspace/hygo-assessment"),
+            Path("/workspace"),
+        ]
+        for prefix in known_prefixes:
+            try:
+                relative = path.relative_to(prefix)
+            except ValueError:
+                continue
+            candidate = self.repo_root / relative
+            if candidate.exists():
+                return candidate
+
+        return path
 
     @staticmethod
     def _build_transform(image_size: int, train: bool) -> transforms.Compose:
@@ -58,7 +79,8 @@ class ManifestFaceDataset(Dataset):
 
     def __getitem__(self, index: int) -> dict[str, torch.Tensor | str | list[str]]:
         row = self.dataframe.iloc[index]
-        image = Image.open(row["image_path"]).convert("RGB")
+        image_path = self._resolve_image_path(row["image_path"])
+        image = Image.open(image_path).convert("RGB")
         tensor = self.transform(image)
 
         age_value = row["age_value"] if pd.notna(row["age_value"]) else -1.0
@@ -80,9 +102,11 @@ class ManifestFaceDataset(Dataset):
             "sample_weight": torch.tensor(sample_weight, dtype=torch.float32),
             "quality_score": torch.tensor(max(0.0, 1.0 - 0.15 * len(quality_flags)), dtype=torch.float32),
             "face_size_ratio": torch.tensor(float(row["face_size_ratio"]), dtype=torch.float32),
-            "image_path": str(row["image_path"]),
+            "image_path": str(image_path),
             "domain_type": str(row["domain_type"]),
             "age_bucket": age_bucket,
+            "gender": str(row.get("gender", "unknown")),
+            "race": str(row.get("race", "unknown")),
             "quality_flags": ",".join(quality_flags),
             "source_dataset": str(row["source_dataset"]),
         }

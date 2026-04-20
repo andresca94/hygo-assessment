@@ -1,0 +1,7 @@
+{
+  "after_count": 217342,
+  "before_count": 217698,
+  "input_manifest": "/workspace/hygo-assessment/ml/training/outputs/manifests/master_manifest.csv",
+  "output_manifest": "/workspace/hygo-assessment/ml/training/outputs/manifests/master_manifest.csv",
+  "removed_duplicates": 356
+}

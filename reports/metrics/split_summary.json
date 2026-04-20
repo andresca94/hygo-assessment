@@ -1,0 +1,5 @@
+{
+  "manifest_count": 4,
+  "output_manifest": "/workspace/hygo-assessment/ml/training/outputs/manifests/master_manifest.csv",
+  "row_count": 217698
+}

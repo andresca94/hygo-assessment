@@ -1,0 +1,8 @@
+source_domain_type,predicted_domain_type,age_bucket,count,mean_p_minor
+ai_generated,real,unknown,60000,0.22733587784751022
+cartoon,ai_generated,unknown,6,0.14721839401560524
+cartoon,anime,unknown,2,0.09377045556902885
+cartoon,edited,unknown,1,0.03941637650132179
+cartoon,real,unknown,59788,0.19095625510972375
+cartoon,unknown,unknown,8,0.2860213969834149
+real,real,unknown,10249,0.4771826736917472

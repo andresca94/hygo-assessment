@@ -1,0 +1,7 @@
+{
+  "method": "temperature",
+  "temperature": 1.1242778301239014,
+  "before_brier": 0.019597128033638,
+  "after_brier": 0.019377050921320915,
+  "predictions_path": "reports/metrics/val_predictions.csv"
+}
