@@ -35,7 +35,13 @@ class FacePreprocessor:
             root = os.getenv("INSIGHTFACE_ROOT")
             allowed_modules_raw = os.getenv("INSIGHTFACE_ALLOWED_MODULES", "detection")
             allowed_modules = [item.strip() for item in allowed_modules_raw.split(",") if item.strip()]
-            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+            providers_env = os.getenv("INSIGHTFACE_PROVIDERS")
+            if providers_env:
+                providers = [item.strip() for item in providers_env.split(",") if item.strip()]
+            elif torch.cuda.is_available():
+                providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+            else:
+                providers = ["CPUExecutionProvider"]
             kwargs = {
                 "name": model_pack,
                 "providers": providers,
@@ -45,7 +51,8 @@ class FacePreprocessor:
             if allowed_modules:
                 kwargs["allowed_modules"] = allowed_modules
             app = FaceAnalysis(**kwargs)
-            app.prepare(ctx_id=0 if torch.cuda.is_available() else -1, det_size=(640, 640))
+            ctx_id = 0 if torch.cuda.is_available() and "CUDAExecutionProvider" in providers else -1
+            app.prepare(ctx_id=ctx_id, det_size=(640, 640))
             self._detector = app
             self.backend_name = "insightface"
         except Exception as exc:  # pragma: no cover

@@ -101,6 +101,8 @@ docker compose up --build
 
 On first boot, the inference service may download public runtime assets such as the [`InsightFace buffalo_l` pack](https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip) and public [`DINOv2`](https://github.com/facebookresearch/dinov2) weights unless those caches are already warm.
 
+If Docker fails during the first build with `no space left on device`, that is Docker disk exhaustion while unpacking the large base image, not an application startup bug. Free Docker build cache with `docker builder prune -af`, optionally free more unused images with `docker system prune -af`, or increase the Docker Desktop disk image size and retry.
+
 Services:
 
 - NestJS API: `http://localhost:3000`
@@ -121,7 +123,7 @@ curl -X POST http://127.0.0.1:3000/v1/age-safety/check \
 
 ### Reviewer sample workflow
 
-If you want a quick unseen-image smoke test, place a small manual-review set under `reviewer_samples/` using the filenames listed in [`reviewer_samples/sample_manifest.json`](reviewer_samples/sample_manifest.json), then run:
+The repo includes a small tracked unseen-image sample set under `reviewer_samples/`. With the stack running, execute:
 
 ```bash
 python scripts/run_reviewer_samples.py
@@ -140,7 +142,7 @@ The script will:
 - write one JSON response per image under `reviewer_samples/results/`
 - run one batch request over all available samples
 
-This is intended to make reviewer testing easy once a handful of unseen images are dropped into the repo.
+This is intended to make reviewer testing easy without having to assemble a sample set first.
 
 ### 2. RunPod RTX 4090 workflow
 
@@ -475,6 +477,20 @@ python ml/training/scripts/evaluate.py --config ml/training/configs/runpod_4090.
 ### Inference service
 
 ```bash
+cp .env.example .env
+python -m venv .venv
+source .venv/bin/activate
+pip install -r ml/inference/requirements.txt
+uvicorn ml.inference.app:app --host 0.0.0.0 --port 8000
+```
+
+On Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+py -3 -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r ml/inference/requirements.txt
 uvicorn ml.inference.app:app --host 0.0.0.0 --port 8000
 ```
 

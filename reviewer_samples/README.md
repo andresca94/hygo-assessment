@@ -1,8 +1,8 @@
 ## Reviewer Samples
 
-This folder is intended for a small unseen manual-review set.
+This folder contains a small tracked manual-review set for quick reviewer testing.
 
-Place the provided test images here using the filenames listed in [sample_manifest.json](/Users/andrescarvajal/Documents/hygo-assessment/reviewer_samples/sample_manifest.json).
+The filenames and expected behavior are listed in [sample_manifest.json](/Users/andrescarvajal/Documents/hygo-assessment/reviewer_samples/sample_manifest.json). Reviewers can swap in their own images if they keep the same filenames or update the manifest.
 
 Then, with the stack running, execute:
 
@@ -27,6 +27,7 @@ Expected high-level behavior by category:
 
 - `adult_face_*`: usually `safe`, sometimes `uncertain` if quality or boundary cues are weak
 - `minor_face_*`: usually `flagged`
+- `ai_generated_minor_face`: usually `uncertain` or `flagged`, rarely `safe`
 - `cartoon_face_*`: usually `uncertain`
 - `anime_face_*`: usually `uncertain`
 - `no_face_*`: should be `uncertain`
