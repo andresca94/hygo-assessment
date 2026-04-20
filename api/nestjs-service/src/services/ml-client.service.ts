@@ -1,4 +1,9 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  GatewayTimeoutException,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import axios, { AxiosInstance } from 'axios';
 import FormData from 'form-data';
 
@@ -8,12 +13,30 @@ import { AgeSafetyBatchResult, AgeSafetyHealth, AgeSafetyResult } from '../types
 @Injectable()
 export class MlClientService {
   private readonly client: AxiosInstance;
+  private readonly timeoutMs: number;
+  private readonly batchTimeoutMs: number;
 
   constructor() {
+    this.timeoutMs = Number(process.env.ML_INFERENCE_TIMEOUT_MS ?? 300000);
+    this.batchTimeoutMs = Number(process.env.ML_INFERENCE_BATCH_TIMEOUT_MS ?? 900000);
     this.client = axios.create({
       baseURL: process.env.ML_INFERENCE_URL ?? 'http://localhost:8000',
-      timeout: 120000,
+      timeout: this.timeoutMs,
     });
+  }
+
+  private throwUpstreamError(error: unknown, action: string): never {
+    if (axios.isAxiosError(error)) {
+      if (error.code === 'ECONNABORTED') {
+        throw new GatewayTimeoutException(`${action} timed out while waiting for the inference service.`);
+      }
+      if (error.response) {
+        throw new BadGatewayException(
+          `${action} failed because the inference service returned ${error.response.status}.`,
+        );
+      }
+    }
+    throw new ServiceUnavailableException('Inference service is not reachable.');
   }
 
   async health(): Promise<AgeSafetyHealth> {
@@ -38,11 +61,16 @@ export class MlClientService {
       form.append('source', metadata.source);
     }
 
-    const response = await this.client.post<AgeSafetyResult>('/v1/age-safety/check', form, {
-      headers: form.getHeaders(),
-      maxBodyLength: Infinity,
-    });
-    return response.data;
+    try {
+      const response = await this.client.post<AgeSafetyResult>('/v1/age-safety/check', form, {
+        headers: form.getHeaders(),
+        maxBodyLength: Infinity,
+        timeout: this.timeoutMs,
+      });
+      return response.data;
+    } catch (error) {
+      this.throwUpstreamError(error, 'Single-image check');
+    }
   }
 
   async checkBatch(files: Express.Multer.File[], metadata: CheckRequestDto): Promise<AgeSafetyBatchResult> {
@@ -60,10 +88,15 @@ export class MlClientService {
       form.append('source', metadata.source);
     }
 
-    const response = await this.client.post<AgeSafetyBatchResult>('/v1/age-safety/check-batch', form, {
-      headers: form.getHeaders(),
-      maxBodyLength: Infinity,
-    });
-    return response.data;
+    try {
+      const response = await this.client.post<AgeSafetyBatchResult>('/v1/age-safety/check-batch', form, {
+        headers: form.getHeaders(),
+        maxBodyLength: Infinity,
+        timeout: this.batchTimeoutMs,
+      });
+      return response.data;
+    } catch (error) {
+      this.throwUpstreamError(error, 'Batch check');
+    }
   }
 }

@@ -105,6 +105,8 @@ If Docker fails during the first build with `no space left on device`, that is D
 
 The default `docker compose up --build` path uses the CUDA-capable inference image. On hosts where Docker exposes NVIDIA GPUs, PyTorch and InsightFace can use CUDA. On hosts without GPU access, the same container falls back to CPU at runtime.
 
+On slower CPU-only or emulated hosts, the NestJS API allows longer upstream inference timeouts by default via `ML_INFERENCE_TIMEOUT_MS=300000` and `ML_INFERENCE_BATCH_TIMEOUT_MS=900000`.
+
 Services:
 
 - NestJS API: `http://localhost:3000`
