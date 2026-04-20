@@ -16,6 +16,7 @@ UTKFACE_DIR="$RAW_DATA_DIR/utkface"
 TMP_DIR="${TMP_DIR:-$ROOT_DIR/tmp/dataset_downloads}"
 UTKFACE_TMP_DIR="$TMP_DIR/utkface_official"
 UTKFACE_FOLDER_URL="${UTKFACE_FOLDER_URL:-https://drive.google.com/drive/folders/0BxYys69jI14kU0I1YUQyY1ZDRUE}"
+UTKFACE_HF_DATASET="${UTKFACE_HF_DATASET:-nu-delta/utkface}"
 
 mkdir -p "$UTKFACE_DIR" "$UTKFACE_TMP_DIR"
 
@@ -65,6 +66,48 @@ else:
 PY
 }
 
+export_utkface_from_hf() {
+  local dataset_id="$1"
+  local output_dir="$2"
+  python - "$dataset_id" "$output_dir" <<'PY'
+import sys
+from pathlib import Path
+
+from datasets import load_dataset
+
+dataset_id = sys.argv[1]
+output_dir = Path(sys.argv[2])
+output_dir.mkdir(parents=True, exist_ok=True)
+
+dataset = load_dataset(dataset_id, split="train")
+written = 0
+
+for index, row in enumerate(dataset):
+    image = row.get("image")
+    if image is None:
+        continue
+
+    file_name = row.get("file_name") or row.get("filename") or row.get("image_id")
+    if file_name:
+        file_name = Path(str(file_name)).name
+    else:
+        age = row.get("age", "unknown")
+        gender = row.get("gender", "unknown")
+        file_name = f"{age}_{gender}_{index}.jpg"
+
+    target_path = output_dir / file_name
+    if target_path.exists():
+        target_path = output_dir / f"{target_path.stem}_{index}{target_path.suffix or '.jpg'}"
+
+    if hasattr(image, "mode") and image.mode not in {"RGB", "L"}:
+        image = image.convert("RGB")
+    image.save(target_path)
+    written += 1
+
+print(f"Exported {written} UTKFace images from {dataset_id} into {output_dir}")
+PY
+}
+
 echo "[datasets] Ensuring gdown is available"
 ensure_python_package "gdown"
 
@@ -72,22 +115,26 @@ if dir_has_images "$UTKFACE_DIR"; then
   echo "[datasets] Skipping UTKFace download; images already present in $UTKFACE_DIR"
 else
   echo "[datasets] Downloading UTKFace aligned-and-cropped archive from the official dataset folder"
-  python -m gdown --folder "$UTKFACE_FOLDER_URL" --continue -O "$UTKFACE_TMP_DIR"
+  if python -m gdown --folder "$UTKFACE_FOLDER_URL" --continue -O "$UTKFACE_TMP_DIR"; then
+    archive_path=""
+    if [[ -f "$UTKFACE_TMP_DIR/UTKFace.tar.gz" ]]; then
+      archive_path="$UTKFACE_TMP_DIR/UTKFace.tar.gz"
+    else
+      archive_path="$(find "$UTKFACE_TMP_DIR" -maxdepth 2 -type f \( -iname 'UTKFace.tar.gz' -o -iname '*.tgz' -o -iname '*.zip' -o -iname '*.tar.gz' \) | head -1)"
+    fi
 
-  archive_path=""
-  if [[ -f "$UTKFACE_TMP_DIR/UTKFace.tar.gz" ]]; then
-    archive_path="$UTKFACE_TMP_DIR/UTKFace.tar.gz"
+    if [[ -z "$archive_path" ]]; then
+      echo "[datasets] Failed to locate a UTKFace archive under $UTKFACE_TMP_DIR" >&2
+      exit 1
+    fi
+
+    echo "[datasets] Extracting $(basename "$archive_path") into $UTKFACE_DIR"
+    python_extract_archive "$archive_path" "$UTKFACE_DIR"
   else
-    archive_path="$(find "$UTKFACE_TMP_DIR" -maxdepth 2 -type f \( -iname 'UTKFace.tar.gz' -o -iname '*.tgz' -o -iname '*.zip' -o -iname '*.tar.gz' \) | head -1)"
+    echo "[datasets] Official UTKFace folder is unavailable; falling back to Hugging Face dataset $UTKFACE_HF_DATASET"
+    ensure_python_package "datasets"
+    export_utkface_from_hf "$UTKFACE_HF_DATASET" "$UTKFACE_DIR"
   fi
-
-  if [[ -z "$archive_path" ]]; then
-    echo "[datasets] Failed to locate a UTKFace archive under $UTKFACE_TMP_DIR" >&2
-    exit 1
-  fi
-
-  echo "[datasets] Extracting $(basename "$archive_path") into $UTKFACE_DIR"
-  python_extract_archive "$archive_path" "$UTKFACE_DIR"
 fi
 
 echo "[datasets] Validating raw dataset folders"
