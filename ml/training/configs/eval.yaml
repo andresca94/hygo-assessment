@@ -1,0 +1,21 @@
+slices:
+  domain:
+    - real
+    - ai_generated
+    - cartoon
+    - anime
+    - three_d
+    - edited
+  age_bucket:
+    - 0-12
+    - 13-15
+    - 16-17
+    - 18-20
+    - 21-25
+    - 26+
+  quality_tags:
+    - blur
+    - occlusion
+    - low_resolution
+    - profile
+    - detector_fallback

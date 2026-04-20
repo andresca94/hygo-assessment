@@ -1,0 +1,26 @@
+base_config: base.yaml
+
+data:
+  image_size: 224
+  batch_size: 24
+  eval_batch_size: 48
+  num_workers: 8
+
+training:
+  epochs: 10
+  lr: 0.0002
+  weight_decay: 0.0001
+  gradient_accumulation_steps: 1
+  amp: true
+
+model:
+  main:
+    backbone_name: tf_efficientnet_b0
+    backbone_source: timm
+  aux:
+    backbone_name: dinov2_vits14_reg
+    backbone_source: torch_hub
+    repo_dir: third_party/dinov2
+
+export:
+  model_version: age-safety-v1.0.0-runpod4090

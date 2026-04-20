@@ -1,0 +1,78 @@
+sources:
+  utkface:
+    acquisition: manual
+    url: https://susanqq.github.io/UTKFace/
+    expected_raw_dir: utkface
+    role: primary_supervision
+    required_for_trial: true
+    license_notes: Verify redistribution terms before mirroring.
+  fairface:
+    acquisition: manual
+    url: https://github.com/joojs/fairface
+    expected_raw_dir: fairface
+    role: primary_supervision
+    required_for_trial: true
+    license_notes: The labels and image access path should be documented per split.
+  appa_real:
+    acquisition: manual
+    url: https://chalearnlap.cvc.uab.cat/dataset/26/description/
+    expected_raw_dir: appa_real
+    role: primary_supervision
+    required_for_trial: true
+    license_notes: Manual registration may be required before download.
+  sfhq:
+    acquisition: manual
+    url: https://github.com/SelfishGene/SFHQ-dataset
+    expected_raw_dir: nonreal/sfhq
+    role: robustness_eval
+    required_for_trial: true
+    license_notes: Synthetic HQ face corpus. Use for domain-shift evaluation and auxiliary-domain supervision.
+  sfhq_t2i:
+    acquisition: manual
+    url: https://github.com/SelfishGene/SFHQ-T2I-dataset
+    expected_raw_dir: nonreal/sfhq_t2i
+    role: robustness_eval
+    required_for_trial: true
+    license_notes: Modern text-to-image synthetic faces. Use for production-like AI-generated robustness testing.
+  generated_photos_synthetic_faces:
+    acquisition: manual
+    url: https://huggingface.co/datasets/GeneratedPhotos/Synthetic_Face_Images_Academic_Dataset
+    expected_raw_dir: nonreal/generated_photos
+    role: robustness_eval
+    required_for_trial: true
+    license_notes: Useful for fairness-oriented synthetic evaluation. Review the dataset card before download.
+  anime_face_dataset:
+    acquisition: manual
+    url: https://github.com/bchao1/Anime-Face-Dataset
+    expected_raw_dir: nonreal/anime_face_dataset
+    role: robustness_eval
+    required_for_trial: true
+    license_notes: Use for robustness evaluation only.
+  icartoonface:
+    acquisition: manual
+    url: https://github.com/luxiangju-PersonAI/iCartoonFace
+    expected_raw_dir: nonreal/icartoonface
+    role: robustness_eval
+    required_for_trial: true
+    license_notes: Use for robustness evaluation only.
+  deepfakeface:
+    acquisition: manual
+    url: https://github.com/OpenRL-Lab/DeepFakeFace
+    expected_raw_dir: nonreal/deepfakeface
+    role: robustness_eval
+    required_for_trial: true
+    license_notes: Use for robustness evaluation only.
+  trueface:
+    acquisition: manual_review
+    url: https://www.scribd.com/document/831455343/TrueFace-a-Dataset-for-the-Detection-of-Synthetic-Face-Images-from-Social-Networks
+    expected_raw_dir: nonreal/trueface
+    role: robustness_eval
+    required_for_trial: true
+    license_notes: Mixed real and synthetic social-network imagery. Only include after provenance and license review are resolved.
+  digiface1m:
+    acquisition: manual
+    url: https://microsoft.github.io/DigiFace1M/
+    expected_raw_dir: nonreal/digiface1m
+    role: robustness_eval
+    required_for_trial: true
+    license_notes: Large-scale synthetic 3D face dataset. Use for 3D-rendered face robustness testing.

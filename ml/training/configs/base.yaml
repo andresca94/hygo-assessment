@@ -1,0 +1,63 @@
+seed: 42
+
+paths:
+  manifest: ml/training/outputs/manifests/master_manifest.csv
+  checkpoints_dir: ml/training/outputs/checkpoints
+  history_dir: ml/training/outputs/history
+  exported_dir: ml/training/outputs/exported
+  reports_dir: reports
+
+data:
+  image_size: 224
+  batch_size: 16
+  eval_batch_size: 32
+  num_workers: 4
+  include_weak_labels: true
+  domain_classes:
+    - real
+    - ai_generated
+    - cartoon
+    - anime
+    - three_d
+    - edited
+    - unknown
+
+training:
+  epochs: 6
+  lr: 0.0003
+  weight_decay: 0.0001
+  gradient_accumulation_steps: 2
+  amp: true
+
+model:
+  main:
+    backbone_name: tf_efficientnet_b0
+    backbone_source: timm
+    pretrained: true
+    dropout: 0.2
+  aux:
+    backbone_name: dinov2_vits14_reg
+    backbone_source: torch_hub
+    repo_dir: third_party/dinov2
+    pretrained: true
+    freeze_encoder: true
+    dropout: 0.2
+
+loss:
+  regression_weight: 0.4
+  bucket_weight: 0.3
+  binary_weight: 0.3
+
+calibration:
+  method: temperature
+  temperature_init: 1.0
+
+policy:
+  safe_threshold: 0.05
+  flagged_threshold: 0.40
+  minimum_face_confidence: 0.80
+  low_face_area_threshold: 0.05
+  max_conflict_score: 0.25
+
+export:
+  model_version: age-safety-v1.0.0

@@ -1,0 +1,40 @@
+repos:
+  dinov2:
+    clone_url: https://github.com/facebookresearch/dinov2.git
+    local_dir: third_party/dinov2
+    install_editable: false
+    required_for_trial: true
+  mivolo:
+    clone_url: https://github.com/WildChlamydia/MiVOLO.git
+    local_dir: third_party/MiVOLO
+    install_editable: true
+    required_for_trial: true
+  insightface:
+    clone_url: https://github.com/deepinsight/insightface.git
+    local_dir: third_party/insightface
+    install_editable: false
+    required_for_trial: false
+
+assets:
+  mivolo_hf:
+    asset_type: huggingface_snapshot
+    repo_id: iitolstykh/mivolo_v2
+    local_dir: assets/mivolo/mivolo_v2
+    required_for_trial: false
+    notes: Optional external inference path for MiVOLO V2.
+  mivolo_detector:
+    asset_type: huggingface_file
+    repo_id: iitolstykh/YOLO-Face-Person-Detector
+    filename: yolov8x_person_face.pt
+    local_path: assets/mivolo/yolov8x_person_face.pt
+    required_for_trial: false
+    notes: Optional person plus face detector for official MiVOLO body-aware inference.
+  insightface_buffalo_l:
+    asset_type: direct_zip
+    url: https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip
+    local_dir: assets/insightface/models
+    required_for_trial: true
+    notes: Detection pack for local InsightFace loading on pods.
+
+prewarm:
+  dinov2_model_name: dinov2_vits14_reg
