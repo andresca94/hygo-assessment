@@ -29,6 +29,22 @@ Recommended template:
 13. Confirm the GPU is visible with `nvidia-smi`.
 14. If you want the external MiVOLO V2 inference path, set `ENABLE_EXTERNAL_MIVOLO_HF=1` in `.env`.
 
+## AI-generated and cartoon coverage
+
+After the baseline run finishes, stage the non-real robustness datasets with:
+
+```bash
+bash scripts/runpod_fetch_robustness_datasets.sh
+bash scripts/runpod_run_robustness_eval.sh
+```
+
+This fetches:
+
+- `DeepFakeFace` AI-generated subsets from Hugging Face
+- `iCartoonFace` detection data from the official Google Drive folder
+
+and produces robustness predictions and slice reports using the trained checkpoints.
+
 ## Required dataset folders
 
 - `data/raw/utkface`

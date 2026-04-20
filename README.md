@@ -151,6 +151,20 @@ bash scripts/runpod_fetch_minimum_datasets.sh
 
 That script downloads the official FairFace train/validation images and label CSVs from the official project links, stages them under `data/raw/fairface`, and reruns dataset validation.
 
+To add AI-generated and cartoon robustness coverage after the baseline run:
+
+```bash
+bash scripts/runpod_fetch_robustness_datasets.sh
+bash scripts/runpod_run_robustness_eval.sh
+```
+
+This stages:
+
+- `DeepFakeFace` text-to-image and inpainting subsets from Hugging Face
+- `iCartoonFace` detection data from the official Google Drive folder
+
+and then evaluates the `robustness` split with the checkpoints already trained on the real-photo baseline.
+
 If you want the external MiVOLO V2 inference path after training, set:
 
 ```bash

@@ -206,7 +206,14 @@ def main() -> None:
     predictions.to_csv(predictions_path, index=False)
 
     labeled = predictions[predictions["minor_label"].notna()].copy()
-    metrics_payload: dict[str, float | str] = {"split": args.split, "row_count": int(len(predictions))}
+    metrics_payload: dict[str, object] = {"split": args.split, "row_count": int(len(predictions))}
+    metrics_payload["verdict_counts"] = {str(key): int(value) for key, value in predictions["verdict"].value_counts().to_dict().items()}
+    metrics_payload["domain_counts"] = {str(key): int(value) for key, value in predictions["domain_type"].value_counts().to_dict().items()}
+    metrics_payload["policy_reason_counts"] = {
+        str(key): int(value) for key, value in predictions["policy_reason"].value_counts().to_dict().items()
+    }
+    metrics_payload["mean_p_minor"] = float(predictions["p_minor"].mean())
+    metrics_payload["mean_uncertainty_score"] = float(predictions["uncertainty_score"].mean())
 
     if not labeled.empty and labeled["minor_label"].nunique() > 1:
         y_true = labeled["minor_label"].astype(int)
@@ -253,7 +260,8 @@ def main() -> None:
         failures = labeled[((labeled["minor_label"] == 1) & (y_pred == 0)) | ((labeled["minor_label"] == 0) & (y_pred == 1))]
         failures.to_csv(failure_dir / f"{args.split}_failures.csv", index=False)
 
-    slice_metrics = labeled.groupby(["domain_type", "age_bucket"]).agg(
+    slice_source = labeled if not labeled.empty else predictions
+    slice_metrics = slice_source.groupby(["domain_type", "age_bucket"]).agg(
         count=("p_minor", "size"),
         mean_p_minor=("p_minor", "mean"),
     )
