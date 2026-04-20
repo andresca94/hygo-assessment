@@ -45,6 +45,16 @@ def infer_domain_from_path(path: Path) -> str:
     return "edited"
 
 
+def infer_source_dataset(raw_dir: Path, image_path: Path) -> str:
+    try:
+        relative_path = image_path.relative_to(raw_dir)
+    except ValueError:
+        return image_path.parents[0].name.lower()
+    if not relative_path.parts:
+        return image_path.parents[0].name.lower()
+    return relative_path.parts[0].lower()
+
+
 def main() -> None:
     args = build_parser().parse_args()
     raw_dir = Path(args.raw_dir)
@@ -59,7 +69,7 @@ def main() -> None:
             image_id=image_path.stem,
             face_id=f"{image_path.stem}_face0",
             image_path=str(image_path.resolve()),
-            source_dataset=image_path.parents[0].name.lower(),
+            source_dataset=infer_source_dataset(raw_dir, image_path),
             license_type="see_source_manifest",
             domain_type=domain_type,
             num_faces=1,

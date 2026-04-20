@@ -59,6 +59,16 @@ extract_all_zips_in_dir() {
   shopt -u nullglob
 }
 
+dir_has_images() {
+  local search_dir="$1"
+  find "$search_dir" -type f \( \
+    -iname '*.jpg' -o \
+    -iname '*.jpeg' -o \
+    -iname '*.png' -o \
+    -iname '*.webp' \
+  \) -print -quit | grep -q .
+}
+
 download_gdrive_folder() {
   local folder_id="$1"
   local output_dir="$2"
@@ -103,8 +113,16 @@ if [[ "$DOWNLOAD_DEEPFAKEFACE" == "1" ]]; then
   download_hf_dataset_file "OpenRL/DeepFakeFace" "text2img.zip" "$TMP_DIR/deepfakeface_text2img.zip"
   download_hf_dataset_file "OpenRL/DeepFakeFace" "inpainting.zip" "$TMP_DIR/deepfakeface_inpainting.zip"
   echo "[robustness] Extracting DeepFakeFace subsets"
-  python_extract_zip "$TMP_DIR/deepfakeface_text2img.zip" "$DEEPFAKE_DIR/text2img"
-  python_extract_zip "$TMP_DIR/deepfakeface_inpainting.zip" "$DEEPFAKE_DIR/inpainting"
+  if dir_has_images "$DEEPFAKE_DIR/text2img"; then
+    echo "[robustness] Skipping DeepFakeFace text2img extraction; images already present"
+  else
+    python_extract_zip "$TMP_DIR/deepfakeface_text2img.zip" "$DEEPFAKE_DIR/text2img"
+  fi
+  if dir_has_images "$DEEPFAKE_DIR/inpainting"; then
+    echo "[robustness] Skipping DeepFakeFace inpainting extraction; images already present"
+  else
+    python_extract_zip "$TMP_DIR/deepfakeface_inpainting.zip" "$DEEPFAKE_DIR/inpainting"
+  fi
 fi
 
 if [[ "$DOWNLOAD_ICARTOONFACE" == "1" ]]; then
@@ -113,7 +131,11 @@ if [[ "$DOWNLOAD_ICARTOONFACE" == "1" ]]; then
   echo "[robustness] Downloading iCartoonFace detection dataset from the official Google Drive folder"
   download_gdrive_folder "1ARKrhmGAMwVNr8M9kXgDzMUDhzusLxb7" "$ICARTOON_DIR"
   echo "[robustness] Extracting iCartoonFace archives"
-  extract_all_zips_in_dir "$ICARTOON_DIR" "$ICARTOON_DIR/extracted"
+  if dir_has_images "$ICARTOON_DIR/extracted"; then
+    echo "[robustness] Skipping iCartoonFace extraction; images already present"
+  else
+    extract_all_zips_in_dir "$ICARTOON_DIR" "$ICARTOON_DIR/extracted"
+  fi
 fi
 
 echo "[robustness] Validating raw dataset folders"
