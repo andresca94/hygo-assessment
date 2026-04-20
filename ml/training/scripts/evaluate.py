@@ -85,6 +85,11 @@ def main() -> None:
         train=False,
         include_weak_labels=True,
     )
+    if len(dataset) == 0:
+        raise RuntimeError(
+            f"No samples were found for split '{args.split}' in {config['paths']['manifest']}. "
+            "Rebuild the manifest or add more data before evaluation."
+        )
     loader = DataLoader(
         dataset,
         batch_size=int(config["data"]["eval_batch_size"]),

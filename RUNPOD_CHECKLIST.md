@@ -22,9 +22,11 @@ Recommended template:
 6. Run `bash scripts/runpod_prepare_assets.sh`.
 7. Review `ml/training/outputs/manifests/source_acquisition.md`.
 8. Place or download the required datasets into `data/raw` under the repo root.
-9. Confirm free disk space with `df -h`.
-10. Confirm the GPU is visible with `nvidia-smi`.
-11. If you want the external MiVOLO V2 inference path, set `ENABLE_EXTERNAL_MIVOLO_HF=1` in `.env`.
+9. Confirm the raw folders are not empty with `find data/raw -maxdepth 3 -type f | head -100`.
+10. Run `python ml/training/scripts/validate_dataset_sources.py --config ml/training/configs/datasets.yaml --raw-root data/raw`.
+11. Confirm free disk space with `df -h`.
+12. Confirm the GPU is visible with `nvidia-smi`.
+13. If you want the external MiVOLO V2 inference path, set `ENABLE_EXTERNAL_MIVOLO_HF=1` in `.env`.
 
 ## Required dataset folders
 
@@ -55,6 +57,12 @@ bash scripts/runpod_install_deps.sh
 bash scripts/runpod_prepare_assets.sh
 bash scripts/runpod_train_full.sh
 ```
+
+If the validator reports zero primary supervision data, do not continue. Populate at least one of:
+
+- `data/raw/utkface`
+- `data/raw/fairface`
+- `data/raw/appa_real`
 
 ## After training
 

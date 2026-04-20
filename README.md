@@ -81,6 +81,8 @@ bash scripts/runpod_prepare_assets.sh
 bash scripts/runpod_train_full.sh
 ```
 
+Before `runpod_train_full.sh`, the training pod must already contain real files under `data/raw/...`. The script now fails fast if the raw dataset folders are empty or if the merged manifest cannot produce supervised `train`, `val`, and `test` rows.
+
 That script is intentionally conservative:
 
 - It prepares external repos, cache directories, and model asset instructions.
@@ -130,7 +132,14 @@ Recommended RunPod sequence:
 cp .env.example .env
 bash scripts/runpod_install_deps.sh
 bash scripts/runpod_prepare_assets.sh
-AUTO_DOWNLOAD_PUBLIC_ASSETS=1 bash scripts/runpod_train_full.sh
+AUTO_DOWNLOAD_PUBLIC_ASSETS=0 bash scripts/runpod_train_full.sh
+```
+
+Quick sanity check before training:
+
+```bash
+find data/raw -maxdepth 3 -type f | head -100
+python ml/training/scripts/validate_dataset_sources.py --config ml/training/configs/datasets.yaml --raw-root data/raw
 ```
 
 If you want the external MiVOLO V2 inference path after training, set:

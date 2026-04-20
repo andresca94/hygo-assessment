@@ -30,6 +30,11 @@ python ml/training/scripts/download_sources.py \
   --raw-root "$RAW_DATA_DIR" \
   --emit-instructions
 
+echo "[runpod] Validating raw dataset folders"
+python ml/training/scripts/validate_dataset_sources.py \
+  --config ml/training/configs/datasets.yaml \
+  --raw-root "$RAW_DATA_DIR"
+
 echo "[runpod] Preparing datasets"
 python ml/training/scripts/prepare_utkface.py --raw-dir "$RAW_DATA_DIR/utkface" --output-dir "$PROCESSED_DATA_DIR/utkface"
 python ml/training/scripts/prepare_fairface.py --raw-dir "$RAW_DATA_DIR/fairface" --output-dir "$PROCESSED_DATA_DIR/fairface"
@@ -43,6 +48,9 @@ python ml/training/scripts/split_dataset.py \
 
 echo "[runpod] Deduplicating manifest"
 python ml/training/scripts/deduplicate.py --input-manifest "$MASTER_MANIFEST" --output-manifest "$MASTER_MANIFEST"
+
+echo "[runpod] Validating merged manifest"
+python ml/training/scripts/validate_manifest.py --manifest "$MASTER_MANIFEST" --require-val-test
 
 echo "[runpod] Training main model"
 python ml/training/scripts/train_main.py --config "$CONFIG_PATH"

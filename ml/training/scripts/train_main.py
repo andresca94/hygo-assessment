@@ -132,6 +132,17 @@ def main() -> None:
         include_weak_labels=bool(config["data"]["include_weak_labels"]),
     )
 
+    if len(train_dataset) == 0:
+        raise RuntimeError(
+            f"No train samples were found in {manifest_path}. Populate data/raw, rerun the dataset prep scripts, "
+            "and rebuild the master manifest."
+        )
+    if len(val_dataset) == 0:
+        raise RuntimeError(
+            f"No validation samples were found in {manifest_path}. Add more supervised data so the split step can "
+            "create a val set before training."
+        )
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=int(config["data"]["batch_size"]),
