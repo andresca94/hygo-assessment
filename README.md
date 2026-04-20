@@ -103,6 +103,8 @@ On first boot, the inference service may download public runtime assets such as 
 
 If Docker fails during the first build with `no space left on device`, that is Docker disk exhaustion rather than an application startup bug. Free Docker build cache with `docker builder prune -af`, optionally free more unused images with `docker system prune -af`, or increase the Docker Desktop disk image size and retry.
 
+The default `docker compose up --build` path uses the CUDA-capable inference image. On hosts where Docker exposes NVIDIA GPUs, PyTorch and InsightFace can use CUDA. On hosts without GPU access, the same container falls back to CPU at runtime.
+
 Services:
 
 - NestJS API: `http://localhost:3000`

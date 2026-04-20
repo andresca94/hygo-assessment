@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime
 
 ENV PYTHONUNBUFFERED=1
 ENV PIP_NO_CACHE_DIR=1
@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY ml/inference/requirements.txt /tmp/requirements.txt
+COPY ml/inference/requirements-gpu.txt /tmp/requirements.txt
 RUN python -m pip install --upgrade pip setuptools wheel \
     && pip install -r /tmp/requirements.txt
 
