@@ -91,7 +91,7 @@ After validation inference, the pipeline fits a temperature scaler on raw valida
 
 ### 1. Local development with Docker Compose
 
-The repository now ships the recommended `FairFace` baseline checkpoint under `ml/training/outputs/exported`, so a clean clone can boot the API without retraining first.
+The repository now ships the recommended `FairFace` baseline checkpoint under `ml/training/outputs/exported`, so a clean clone can boot the API without retraining first. This is the default reviewer path.
 
 ```bash
 cp .env.example .env
@@ -101,7 +101,7 @@ docker compose up --build
 
 On first boot, the inference service may download public runtime assets such as the [`InsightFace buffalo_l` pack](https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip) and public [`DINOv2`](https://github.com/facebookresearch/dinov2) weights unless those caches are already warm.
 
-If Docker fails during the first build with `no space left on device`, that is Docker disk exhaustion while unpacking the large base image, not an application startup bug. Free Docker build cache with `docker builder prune -af`, optionally free more unused images with `docker system prune -af`, or increase the Docker Desktop disk image size and retry.
+If Docker fails during the first build with `no space left on device`, that is Docker disk exhaustion rather than an application startup bug. Free Docker build cache with `docker builder prune -af`, optionally free more unused images with `docker system prune -af`, or increase the Docker Desktop disk image size and retry.
 
 Services:
 
@@ -483,6 +483,8 @@ source .venv/bin/activate
 pip install -r ml/inference/requirements.txt
 uvicorn ml.inference.app:app --host 0.0.0.0 --port 8000
 ```
+
+The manual Python path is an alternative to Docker and has been verified on macOS arm64 with Python 3.12. `python -m venv .venv` can take a minute on a clean machine; let it finish before activating the environment.
 
 On Windows PowerShell:
 
