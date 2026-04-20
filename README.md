@@ -137,6 +137,12 @@ On Windows, if `python` is not on `PATH`, use:
 py -3 scripts/run_reviewer_samples.py
 ```
 
+On slower CPU-only hosts, or on Apple Silicon running the `amd64` CUDA container under emulation, the sample requests can take a few minutes. The helper defaults to a larger timeout now, and you can raise it further if needed:
+
+```bash
+python scripts/run_reviewer_samples.py --timeout 300
+```
+
 The script will:
 
 - call the public health endpoint

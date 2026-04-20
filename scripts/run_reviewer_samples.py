@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import mimetypes
+import socket
 import sys
 import urllib.error
 import urllib.request
@@ -24,7 +25,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sample-dir", default=str(DEFAULT_SAMPLE_DIR))
     parser.add_argument("--manifest", default=str(DEFAULT_MANIFEST))
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
-    parser.add_argument("--timeout", type=float, default=60.0)
+    parser.add_argument("--timeout", type=float, default=180.0)
     parser.add_argument("--skip-batch", action="store_true")
     return parser.parse_args()
 
@@ -82,7 +83,7 @@ def main() -> int:
 
     try:
         health = request_json(f"{args.api_base_url}/v1/age-safety/health", timeout=args.timeout)
-    except urllib.error.URLError as exc:
+    except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
         print(f"Health check failed: {exc}", file=sys.stderr)
         return 1
 
@@ -102,14 +103,19 @@ def main() -> int:
             print(f"{filename} [{category}] -> missing")
             continue
 
+        print(f"Submitting {filename} [{category}] with timeout={args.timeout:.0f}s")
         try:
             payload = post_files(
                 f"{args.api_base_url}/v1/age-safety/check",
                 [("file", image_path)],
                 timeout=args.timeout,
             )
-        except urllib.error.URLError as exc:
-            print(f"{filename} [{category}] -> request failed: {exc}", file=sys.stderr)
+        except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
+            print(
+                f"{filename} [{category}] -> request failed: {exc}. "
+                f"Retry with --timeout {max(300, int(args.timeout * 2))}",
+                file=sys.stderr,
+            )
             continue
 
         (output_dir / f"{image_path.stem}.json").write_text(json.dumps(payload, indent=2))
@@ -119,14 +125,19 @@ def main() -> int:
     if args.skip_batch or not available_files:
         return 0
 
+    batch_timeout = max(args.timeout, args.timeout * len(available_files))
+    print(f"Submitting batch of {len(available_files)} samples with timeout={batch_timeout:.0f}s")
     try:
         batch_payload = post_files(
             f"{args.api_base_url}/v1/age-safety/check-batch",
             [("files", path) for path in available_files],
-            timeout=args.timeout,
+            timeout=batch_timeout,
         )
-    except urllib.error.URLError as exc:
-        print(f"Batch request failed: {exc}", file=sys.stderr)
+    except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
+        print(
+            f"Batch request failed: {exc}. Retry with --timeout {max(300, int(args.timeout * 2))}",
+            file=sys.stderr,
+        )
         return 1
 
     (output_dir / "batch_results.json").write_text(json.dumps(batch_payload, indent=2))
