@@ -13,7 +13,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY ml/inference/requirements-gpu.txt /tmp/requirements.txt
-RUN python -m pip install --upgrade pip setuptools wheel \
-    && pip install -r /tmp/requirements.txt
+RUN pip install -r /tmp/requirements.txt
 
 CMD ["uvicorn", "ml.inference.app:app", "--host", "0.0.0.0", "--port", "8000"]
