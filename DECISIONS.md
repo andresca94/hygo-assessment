@@ -31,6 +31,8 @@ Robustness and abstention testing use:
 
 These non-real sources are intentionally not treated as the main source of exact age ground truth. Their role is to expose failure under domain shift and to justify conservative abstention.
 
+For the current proof-of-concept run, the fastest reproducible trained baseline is `FairFace`. The pipeline already supports `UTKFace`, `APPA-REAL`, and the robustness datasets, but those are staged as the next iteration rather than being falsely claimed as already-trained sources.
+
 ## Model choices
 
 Preferred architecture:
@@ -43,19 +45,47 @@ The codebase includes fallback implementations because model availability on fir
 
 The production-oriented asset path is:
 
-- optional MiVOLO V2 weights from Hugging Face for inference-time age estimation,
-- official DINOv2 loading via PyTorch Hub with an optional local repo clone,
-- InsightFace `buffalo_l` loaded from a local root to avoid unexpected runtime downloads on pods.
+- optional MiVOLO V2 weights from Hugging Face for inference-time age estimation
+- official DINOv2 loading via PyTorch Hub with an optional local repo clone
+- InsightFace `buffalo_l` loaded from a local root to avoid unexpected runtime downloads on pods
 
-## Threshold policy
+## Threshold decisions
 
 Suggested defaults:
 
-- `safe` if `p_minor < 0.05`, quality is acceptable, there is no strong model conflict, and the adult interval is clearly above 18.
-- `flagged` if `p_minor >= 0.40` or the age estimate is close to or below the legal boundary.
-- `uncertain` otherwise.
+- `safe` if `p_minor < 0.05`, quality is acceptable, there is no strong model conflict, and the adult interval is clearly above 18
+- `flagged` if `p_minor >= 0.40` or the age estimate is close to or below the legal boundary
+- `uncertain` otherwise
 
-Thresholds should be tuned on validation slices, not on global accuracy.
+Thresholds should be tuned on validation slices, not on global accuracy. The explicit tradeoff is to accept more abstention and more false positives in exchange for reducing dangerous misses on minors.
+
+## Bias analysis
+
+Bias is evaluated primarily with `FairFace`, because it offers demographic attributes that make subgroup reporting feasible. The intended analysis breaks metrics down by:
+
+- age bucket
+- gender
+- race
+- domain type
+- image quality slice
+
+Known constraints:
+
+- demographic labels in public datasets are imperfect and should not be treated as identity truth
+- the first proof-of-concept run may be stronger on demographic reporting than on cross-domain robustness if only `FairFace` is staged
+- bias results should be reported as measured behavior, not as proof that the system is fair enough for fully autonomous enforcement
+
+## Real vs generated images
+
+The repository treats real and generated images as a first-class domain-shift problem.
+
+The strategy is:
+
+- use `UTKFace`, `FairFace`, and `APPA-REAL` for primary age supervision
+- use synthetic, anime, cartoon, 3D, and edited datasets for robustness evaluation and abstention testing
+- prefer `uncertain` when the domain signal is unstable or the auxiliary model conflicts with the main model
+
+This is deliberate. Synthetic and stylized datasets often do not provide reliable legal-age labels, so forcing them into the main supervision pool would make the model look broader while actually reducing trustworthiness.
 
 ## Evaluation philosophy
 
@@ -75,6 +105,22 @@ Global accuracy is not the primary objective. The important analysis happens on:
 - multi-face images
 - real vs synthetic vs stylized content
 
+## Integration design
+
+Recommended platform integration:
+
+- profile photo upload: synchronous call, accept only `safe`, reject `flagged`, ask for replacement or manual review on `uncertain`
+- training photo upload batch: asynchronous batch check with per-image results and a batch-level summary
+- generated image delivery: check before the image is returned to the user, block on `flagged`, hold or discard on `uncertain` depending on product policy
+- public gallery publish: run another check before publish, even if the image was screened earlier
+
+Edge cases:
+
+- no face detected: return `uncertain`
+- multiple faces: evaluate every face and use the highest-risk result at the image level
+- repeated `uncertain` or `flagged` outcomes: escalate to manual review, additional verification, or account-level friction depending on policy
+- retraining: collect confirmed false positives, dangerous misses, repeated `uncertain` cases, and new domain-shift examples for the next dataset iteration
+
 ## Production concerns
 
 The design explicitly handles:
@@ -91,3 +137,13 @@ Future production improvements:
 - domain-specific calibration
 - provenance signals such as C2PA-aligned metadata
 - active learning around repeated `uncertain` and confirmed review outcomes
+
+## What I'd do with more time
+
+The next highest-value improvements would be:
+
+- add `UTKFace` and `APPA-REAL` into the trained baseline and rerun calibration
+- add at least one synthetic robustness dataset such as `SFHQ-T2I` or `DeepFakeFace` into evaluation
+- build a stronger borderline-age audit slice around `16-21`
+- run a tighter demographic report from the completed evaluation artifacts and use it to retune thresholds
+- verify the full NestJS-to-Python inference path under `docker-compose` with the exported bundle that will be submitted
