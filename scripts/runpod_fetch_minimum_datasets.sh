@@ -47,7 +47,7 @@ PY
 download_gdrive_file() {
   local file_id="$1"
   local output_path="$2"
-  python -m gdown --fuzzy "https://drive.google.com/file/d/${file_id}/view?usp=sharing" -O "$output_path"
+  python -m gdown "https://drive.google.com/uc?id=${file_id}" --continue -O "$output_path"
 }
 
 echo "[datasets] Ensuring gdown is available"
