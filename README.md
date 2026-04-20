@@ -77,6 +77,7 @@ Inside the pod:
 ```bash
 cp .env.example .env
 bash scripts/runpod_install_deps.sh
+bash scripts/runpod_fetch_minimum_datasets.sh
 bash scripts/runpod_prepare_assets.sh
 bash scripts/runpod_train_full.sh
 ```
@@ -141,6 +142,14 @@ Quick sanity check before training:
 find data/raw -maxdepth 3 -type f | head -100
 python ml/training/scripts/validate_dataset_sources.py --config ml/training/configs/datasets.yaml --raw-root data/raw
 ```
+
+If you want the fastest first successful run, use the built-in FairFace fetch helper:
+
+```bash
+bash scripts/runpod_fetch_minimum_datasets.sh
+```
+
+That script downloads the official FairFace train/validation images and label CSVs from the official project links, stages them under `data/raw/fairface`, and reruns dataset validation.
 
 If you want the external MiVOLO V2 inference path after training, set:
 

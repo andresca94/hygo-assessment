@@ -19,14 +19,15 @@ Recommended template:
 3. Set a `JUPYTER_PASSWORD` value in the pod template before startup.
 4. Ensure the pod `WORKSPACE` environment variable matches the actual mountpoint you are using for storage.
 5. Run `bash scripts/runpod_install_deps.sh`.
-6. Run `bash scripts/runpod_prepare_assets.sh`.
-7. Review `ml/training/outputs/manifests/source_acquisition.md`.
-8. Place or download the required datasets into `data/raw` under the repo root.
-9. Confirm the raw folders are not empty with `find data/raw -maxdepth 3 -type f | head -100`.
-10. Run `python ml/training/scripts/validate_dataset_sources.py --config ml/training/configs/datasets.yaml --raw-root data/raw`.
-11. Confirm free disk space with `df -h`.
-12. Confirm the GPU is visible with `nvidia-smi`.
-13. If you want the external MiVOLO V2 inference path, set `ENABLE_EXTERNAL_MIVOLO_HF=1` in `.env`.
+6. For the fastest first run, stage FairFace automatically with `bash scripts/runpod_fetch_minimum_datasets.sh`.
+7. Run `bash scripts/runpod_prepare_assets.sh`.
+8. Review `ml/training/outputs/manifests/source_acquisition.md`.
+9. If you are not using the fetch helper, place or download the required datasets into `data/raw` under the repo root.
+10. Confirm the raw folders are not empty with `find data/raw -maxdepth 3 -type f | head -100`.
+11. Run `python ml/training/scripts/validate_dataset_sources.py --config ml/training/configs/datasets.yaml --raw-root data/raw`.
+12. Confirm free disk space with `df -h`.
+13. Confirm the GPU is visible with `nvidia-smi`.
+14. If you want the external MiVOLO V2 inference path, set `ENABLE_EXTERNAL_MIVOLO_HF=1` in `.env`.
 
 ## Required dataset folders
 
@@ -54,6 +55,7 @@ Recommended template:
 ```bash
 cp .env.example .env
 bash scripts/runpod_install_deps.sh
+bash scripts/runpod_fetch_minimum_datasets.sh
 bash scripts/runpod_prepare_assets.sh
 bash scripts/runpod_train_full.sh
 ```
