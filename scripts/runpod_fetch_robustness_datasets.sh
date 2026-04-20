@@ -46,6 +46,19 @@ with zipfile.ZipFile(archive) as handle:
 PY
 }
 
+extract_all_zips_in_dir() {
+  local search_dir="$1"
+  local output_root="$2"
+  shopt -s nullglob
+  for archive_path in "$search_dir"/*.zip; do
+    local archive_name
+    archive_name="$(basename "$archive_path" .zip)"
+    echo "[robustness] Extracting $(basename "$archive_path")"
+    python_extract_zip "$archive_path" "$output_root/$archive_name"
+  done
+  shopt -u nullglob
+}
+
 download_gdrive_folder() {
   local folder_id="$1"
   local output_dir="$2"
@@ -99,6 +112,8 @@ if [[ "$DOWNLOAD_ICARTOONFACE" == "1" ]]; then
   mkdir -p "$ICARTOON_DIR"
   echo "[robustness] Downloading iCartoonFace detection dataset from the official Google Drive folder"
   download_gdrive_folder "1ARKrhmGAMwVNr8M9kXgDzMUDhzusLxb7" "$ICARTOON_DIR"
+  echo "[robustness] Extracting iCartoonFace archives"
+  extract_all_zips_in_dir "$ICARTOON_DIR" "$ICARTOON_DIR/extracted"
 fi
 
 echo "[robustness] Validating raw dataset folders"
