@@ -12,22 +12,29 @@ This is deliberate. In a safety-critical setting, the cost of a false negative i
 
 ## Dataset choices
 
-Primary supervision is built on:
+The shipped checkpoint is trained on:
 
-- `UTKFace` for broad age coverage and a fast proof-of-concept baseline.
-- `FairFace` for subgroup analysis and bias measurement.
-- `APPA-REAL` for ambiguity-aware age supervision near visually difficult boundaries.
+- [`FairFace`](https://github.com/joojs/fairface/) for the actual supervised baseline, held-out validation and test metrics, and demographic reporting.
 
-Robustness and abstention testing use:
+Evaluated ablation, but not shipped:
 
-- `SFHQ`
-- `SFHQ-T2I`
-- `Generated Photos Synthetic Face Images Academic Dataset`
-- `Anime Face Dataset`
-- `iCartoonFace`
-- `DeepFakeFace`
-- `DigiFace-1M`
+- [`UTKFace`](https://susanqq.github.io/UTKFace/) for broader age coverage and a harder teenage slice, used only in the rejected `UTKFace + FairFace` comparison run.
+
+Scaffolded but not used in the shipped metrics:
+
+- [`APPA-REAL`](https://chalearnlap.cvc.uab.cat/dataset/26/description/) for future ambiguity-aware age supervision.
+- [`SFHQ`](https://github.com/SelfishGene/SFHQ-dataset)
+- [`SFHQ-T2I`](https://github.com/SelfishGene/SFHQ-T2I-dataset)
+- [`Generated Photos Synthetic Face Images Academic Dataset`](https://huggingface.co/datasets/GeneratedPhotos/Synthetic_Face_Images_Academic_Dataset)
+- [`Anime Face Dataset`](https://github.com/bchao1/Anime-Face-Dataset)
+- [`DigiFace-1M`](https://microsoft.github.io/DigiFace1M/)
 - `TrueFace`, when access and licensing are validated
+
+The shipped robustness and abstention evaluation uses:
+
+- [`DeepFakeFace`](https://github.com/OpenRL-Lab/DeepFakeFace)
+- [`iCartoonFace`](https://github.com/luxiangju-PersonAI/iCartoonFace)
+- held-out `FairFace` real-photo rows as the real reference domain
 
 These non-real sources are intentionally not treated as the main source of exact age ground truth. Their role is to expose failure under domain shift and to justify conservative abstention.
 
@@ -39,9 +46,21 @@ On April 20, 2026, I also ran a `UTKFace + FairFace` ablation. That experiment i
 
 Preferred architecture:
 
-- `InsightFace` for detection and alignment.
-- `MiVOLO` as the main age estimator.
-- `DINOv2` as the auxiliary domain-robust encoder.
+- [`InsightFace`](https://github.com/deepinsight/insightface) for detection and alignment.
+- a custom `MiVOLOAgeEstimator` main model whose design is inspired by [`MiVOLO`](https://github.com/WildChlamydia/MiVOLO), but whose shipped checkpoint uses a `timm` `tf_efficientnet_b0` backbone with lightweight age, bucket, and minor-risk heads.
+- [`DINOv2`](https://github.com/facebookresearch/dinov2) as the auxiliary domain-robust encoder.
+
+The shipped architecture is intentionally not “detector -> classifier -> done.”
+
+It is:
+
+- face detection and aligned crop extraction with `InsightFace`
+- primary age estimation and `p_minor` scoring with a `MiVOLO`-inspired head over `tf_efficientnet_b0`
+- auxiliary domain and uncertainty scoring with `DINOv2`
+- post-hoc temperature calibration of the main minor-risk score
+- policy evaluation over age interval, conflict score, domain type, face confidence, face area, and quality flags
+
+That extra policy layer is the main design choice of the system. It is what allows the final product to abstain under shift instead of pretending that every image belongs to the in-domain photographic distribution.
 
 The codebase includes fallback implementations because model availability on first boot is often incomplete. That keeps the scaffold runnable on a pod before the final checkpoints are ready.
 
@@ -60,6 +79,14 @@ Suggested defaults for the shipped baseline:
 - `uncertain` otherwise
 
 Thresholds should be tuned on validation slices, not on global accuracy. The explicit tradeoff is to accept more abstention and more false positives in exchange for reducing dangerous misses on minors.
+
+How to interpret the shipped metrics:
+
+- `minor_recall` is the core safety metric for the binary classifier
+- `minor_false_negative_rate` is its inverse framing and is easier to reason about operationally
+- `minor_precision` matters, but is secondary to avoiding dangerous misses
+- `roc_auc` and `pr_auc` show the score quality is high enough that policy tuning is meaningful
+- `verdict_counts` are policy outcomes, not direct classifier outputs
 
 The `UTKFace` ablation made this tradeoff explicit: it improved `minor_precision` but worsened `minor_recall` and produced unsafe behavior in teenage slices unless the adult-safe gate was tightened so aggressively that `safe` throughput collapsed. That is the reason it remains an ablation rather than the final policy target.
 
@@ -97,7 +124,8 @@ The repository treats real and generated images as a first-class domain-shift pr
 
 The strategy is:
 
-- use `UTKFace`, `FairFace`, and `APPA-REAL` for primary age supervision
+- use `FairFace` as the shipped supervised training and evaluation set
+- use the rejected `UTKFace + FairFace` ablation to understand borderline-age tradeoffs before shipping
 - use synthetic, anime, cartoon, 3D, and edited datasets for robustness evaluation and abstention testing
 - prefer `uncertain` when the domain signal is unstable or the auxiliary model conflicts with the main model
 
@@ -109,7 +137,7 @@ For the shipped baseline, the robustness split produced:
 - `4,407` `flagged`
 - `0` `safe`
 
-That should be read as a conservative abstention result, not as a claim that the model accurately estimates age on synthetic or cartoon images.
+That should be read as a conservative abstention result, not as a claim that the model accurately estimates age on synthetic or cartoon images. In the shipped report, those robustness rows come primarily from `DeepFakeFace` and `iCartoonFace`, with held-out `FairFace` rows as the real-photo reference.
 
 ## Evaluation philosophy
 

@@ -28,11 +28,19 @@ The highest-risk false negatives are expected to concentrate in these slices:
 - multi-face scenes
 - synthetic, stylized, edited, cartoon, anime, or 3D-rendered faces
 
-## Primary data sources
+## Repository-supported data sources
 
-- `UTKFace`
-- `FairFace`
-- `APPA-REAL`
+Shipped supervised source:
+
+- [`FairFace`](https://github.com/joojs/fairface)
+
+Evaluated ablation only:
+
+- [`UTKFace`](https://susanqq.github.io/UTKFace/)
+
+Scaffolded but not used in the shipped checkpoint:
+
+- [`APPA-REAL`](https://chalearnlap.cvc.uab.cat/dataset/26/description/)
 
 ## Shipped checkpoint data usage
 
@@ -40,19 +48,24 @@ The final shipped checkpoint in this repository was trained on the `FairFace` ba
 
 Additional dataset work in this repo should be read as:
 
-- `UTKFace`: implemented and evaluated as an ablation, but rejected as the final checkpoint because it reduced minor recall in the `13-17` slice
-- `APPA-REAL`: planned and scaffolded, but not part of the shipped checkpoint
+- [`UTKFace`](https://susanqq.github.io/UTKFace/): implemented and evaluated as an ablation, but rejected as the final checkpoint because it reduced minor recall in the `13-17` slice
+- [`APPA-REAL`](https://chalearnlap.cvc.uab.cat/dataset/26/description/): planned and scaffolded, but not part of the shipped checkpoint
 - non-real datasets: used for robustness evaluation and abstention analysis, not for the main supervised age labels in the shipped model
 
-## Robustness-only sources
+## Robustness-only or scaffolded non-real sources
 
-- `SFHQ`
-- `SFHQ-T2I`
-- `Generated Photos Synthetic Face Images Academic Dataset`
-- `Anime Face Dataset`
-- `iCartoonFace`
-- `DeepFakeFace`
-- `DigiFace-1M`
+Used in the shipped robustness report:
+
+- [`DeepFakeFace`](https://github.com/OpenRL-Lab/DeepFakeFace)
+- [`iCartoonFace`](https://github.com/luxiangju-PersonAI/iCartoonFace)
+
+Scaffolded for future robustness expansion:
+
+- [`SFHQ`](https://github.com/SelfishGene/SFHQ-dataset)
+- [`SFHQ-T2I`](https://github.com/SelfishGene/SFHQ-T2I-dataset)
+- [`Generated Photos Synthetic Face Images Academic Dataset`](https://huggingface.co/datasets/GeneratedPhotos/Synthetic_Face_Images_Academic_Dataset)
+- [`Anime Face Dataset`](https://github.com/bchao1/Anime-Face-Dataset)
+- [`DigiFace-1M`](https://microsoft.github.io/DigiFace1M/)
 - `TrueFace`, subject to access and license review
 
 ## Provenance and licensing

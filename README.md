@@ -17,14 +17,38 @@ The intended production path is:
 
 `face detection -> face alignment/crops -> main age estimator -> auxiliary domain-robust encoder -> calibration -> policy engine -> safe/flagged/uncertain`
 
-Current repository decisions:
+Repository-supported model families:
 
-- `InsightFace` is the preferred face detection and alignment stack.
-- `MiVOLO` is the preferred primary age estimator.
-- `DINOv2` is the preferred auxiliary encoder for robustness under domain shift.
-- The shipped code includes resilient fallbacks so the scaffold can boot before final model weights are available.
-- The inference service supports an optional external MiVOLO V2 loading path through Hugging Face weights.
-- The auxiliary encoder supports official DINOv2 loading through PyTorch Hub, using a local repo clone when present.
+- [`InsightFace`](https://github.com/deepinsight/insightface) provides face detection and alignment.
+- [`MiVOLO`](https://github.com/WildChlamydia/MiVOLO) informed the main-model design, and an optional external MiVOLO V2 Hugging Face path is available at inference time.
+- [`DINOv2`](https://github.com/facebookresearch/dinov2) provides the auxiliary encoder used for domain and uncertainty estimation.
+- The shipped code includes resilient fallbacks so the scaffold can boot before optional external assets are present.
+
+### Shipped model architecture
+
+The shipped baseline is a policy-driven ensemble rather than a single thresholded classifier:
+
+1. [`InsightFace`](https://github.com/deepinsight/insightface) detects faces and provides aligned crops plus detection confidence.
+2. A custom `MiVOLOAgeEstimator` main model predicts:
+   - scalar age estimate
+   - calibrated `p_minor` score
+   - age-bucket logits
+3. An auxiliary [`DINOv2`](https://github.com/facebookresearch/dinov2) encoder predicts:
+   - auxiliary `p_minor`
+   - domain type (`real`, `ai_generated`, `cartoon`, `anime`, `three_d`, `edited`, `unknown`)
+   - uncertainty score
+4. The inference layer converts those signals into an age interval and conflict score.
+5. A policy engine emits `safe`, `flagged`, or `uncertain` using:
+   - calibrated `p_minor`
+   - lower bound of the age interval
+   - quality flags
+   - face confidence and face area
+   - disagreement between the main and auxiliary models
+   - non-photographic domain detection
+
+In the shipped checkpoint, `MiVOLOAgeEstimator` uses a `timm` `tf_efficientnet_b0` backbone with lightweight age, age-bucket, and minor-risk heads. The optional external MiVOLO V2 path is implemented, but it is not the default path used by the shipped submission metrics.
+
+This matters because the challenge is safety-critical. The production decision is not “what is the argmax class,” it is “do we have enough evidence to safely approve this image?”
 
 ## Repository Layout
 
@@ -54,6 +78,8 @@ cp .env.example .env
 python ml/training/scripts/bootstrap_model_assets.py --config ml/training/configs/model_assets.yaml --emit-instructions --prepare-dirs
 docker compose up --build
 ```
+
+On first boot, the inference service may download public runtime assets such as the [`InsightFace buffalo_l` pack](https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip) and public [`DINOv2`](https://github.com/facebookresearch/dinov2) weights unless those caches are already warm.
 
 Services:
 
@@ -199,6 +225,15 @@ Current recommended final candidate metrics from the `FairFace` baseline:
 - `roc_auc`: `0.9959`
 - `pr_auc`: `0.9855`
 
+Validation metrics for the same shipped checkpoint:
+
+- `minor_precision`: `0.8827`
+- `minor_recall`: `0.9700`
+- `minor_f1`: `0.9243`
+- `minor_false_negative_rate`: `0.0300`
+- `roc_auc`: `0.9953`
+- `pr_auc`: `0.9845`
+
 The shipped baseline weights used for local inference are included at:
 
 - `ml/training/outputs/exported/main_best.pt`
@@ -252,6 +287,33 @@ The main tradeoff is deliberate:
 - under domain shift it prefers `uncertain` over overconfident `safe`
 - the rejected `UTKFace` ablation showed why this mattered: higher precision, but worse recall in the `13-17` slice
 
+### How to read the metrics
+
+The most important metric in this repository is not raw accuracy. It is whether the system misses minors.
+
+- `minor_recall`
+  - Of all true minors, how many did the model flag as minor-risk at a binary `p_minor >= 0.5` decision threshold.
+  - Higher is better.
+- `minor_false_negative_rate`
+  - Of all true minors, how many were missed by the binary classifier.
+  - Lower is better.
+  - This is the safety-critical metric for the challenge.
+- `minor_precision`
+  - Of all images flagged as minor-risk, how many were actually minors.
+  - Higher is better, but less important than recall in this use case.
+- `roc_auc` / `pr_auc`
+  - Ranking-quality metrics for the continuous `p_minor` score.
+  - They show the model separates minors from adults well, but they do not replace threshold or policy evaluation.
+- `verdict_counts`
+  - These are policy outputs, not raw classifier outputs.
+  - A high `uncertain` count on robustness data is expected and intentional when the model sees domain shift.
+
+For this submission, the key interpretation is:
+
+- the shipped baseline performs strongly on real-photo test data
+- the system remains conservative under AI-generated and cartoon shift
+- the abstention policy is doing meaningful safety work on top of the classifier scores
+
 To add AI-generated and cartoon robustness coverage after the baseline run:
 
 ```bash
@@ -274,26 +336,78 @@ ENABLE_EXTERNAL_MIVOLO_HF=1
 
 ## Dataset Strategy
 
-The project follows a data-first and failure-slice-driven process.
+The project follows a data-first and failure-slice-driven process, but the final shipped submission is intentionally narrower than the full scaffold.
 
-Primary supervision:
+Shipped supervised training and evaluation:
 
-- UTKFace
-- FairFace
-- APPA-REAL
+- [`FairFace`](https://github.com/joojs/fairface)
+  - this is the only dataset used to train the shipped baseline checkpoint
+  - it also powers the shipped validation, test, and subgroup metrics
 
-Robustness evaluation only:
+Evaluated ablation, not shipped:
 
-- SFHQ
-- SFHQ-T2I
-- Generated Photos Synthetic Face Images Academic Dataset
-- Anime Face Dataset
-- iCartoonFace
-- DeepFakeFace
-- DigiFace-1M
-- TrueFace if access and license review are resolved for the run
+- [`UTKFace`](https://susanqq.github.io/UTKFace/)
+  - integrated into the pipeline and tested as a `UTKFace + FairFace` ablation
+  - rejected for final deployment because it worsened minor recall in the critical `13-17` slice
+
+Scaffolded but not used in the shipped metrics:
+
+- [`APPA-REAL`](https://chalearnlap.cvc.uab.cat/dataset/26/description/)
+- [`SFHQ`](https://github.com/SelfishGene/SFHQ-dataset)
+- [`SFHQ-T2I`](https://github.com/SelfishGene/SFHQ-T2I-dataset)
+- [`Generated Photos Synthetic Face Images Academic Dataset`](https://huggingface.co/datasets/GeneratedPhotos/Synthetic_Face_Images_Academic_Dataset)
+- [`Anime Face Dataset`](https://github.com/bchao1/Anime-Face-Dataset)
+- [`DigiFace-1M`](https://microsoft.github.io/DigiFace1M/)
+- `TrueFace`, pending a cleaner provenance and licensing path
+
+Shipped robustness evaluation:
+
+- [`DeepFakeFace`](https://github.com/OpenRL-Lab/DeepFakeFace)
+- [`iCartoonFace`](https://github.com/luxiangju-PersonAI/iCartoonFace)
+- held-out real-photo rows from `FairFace`
 
 The non-real sets are used to stress test domain shift and abstention behavior, not as the main source of exact age labels.
+
+### Dataset references
+
+Shipped supervised training and demographic evaluation:
+
+- [`FairFace`](https://github.com/joojs/fairface)
+  - balanced race, gender, and age labels
+  - used as the shipped supervised baseline because it provides the cleanest subgroup reporting story
+
+Evaluated ablation only:
+
+- [`UTKFace`](https://susanqq.github.io/UTKFace/)
+  - broad age coverage with simple filename-derived metadata
+  - useful for ablations and hard-slice coverage, but the final checkpoint rejected it because of worse `13-17` recall
+
+Scaffolded but not used in the shipped final metrics:
+
+- [`APPA-REAL`](https://chalearnlap.cvc.uab.cat/dataset/26/description/)
+  - real and apparent age estimation benchmark
+  - scaffolded for future ambiguity-aware training, but not part of the shipped checkpoint
+
+Shipped robustness and abstention evaluation:
+
+- [`DeepFakeFace`](https://github.com/OpenRL-Lab/DeepFakeFace)
+  - diffusion/deepfake-oriented synthetic face data
+  - used to test abstention on AI-generated faces
+- [`iCartoonFace`](https://github.com/luxiangju-PersonAI/iCartoonFace)
+  - large cartoon-face dataset
+  - used to test abstention on stylized/cartoon inputs
+- [`FairFace`](https://github.com/joojs/fairface)
+  - held-out real-photo rows included as the real reference domain in the shipped robustness report
+
+Scaffolded robustness sources not used in the shipped robustness metrics:
+
+- [`SFHQ`](https://github.com/SelfishGene/SFHQ-dataset)
+- [`SFHQ-T2I`](https://github.com/SelfishGene/SFHQ-T2I-dataset)
+- [`Generated Photos Synthetic Face Images Academic Dataset`](https://huggingface.co/datasets/GeneratedPhotos/Synthetic_Face_Images_Academic_Dataset)
+- [`Anime Face Dataset`](https://github.com/bchao1/Anime-Face-Dataset)
+- [`DigiFace-1M`](https://microsoft.github.io/DigiFace1M/)
+- `TrueFace`
+  - deliberately left as manual-review-only until provenance and licensing are clearer
 
 ## Main Commands
 
@@ -382,10 +496,13 @@ This repository is a production-oriented scaffold that also ships a trained base
 
 External asset bootstrap is documented and scripted for:
 
-- MiVOLO V2 Hugging Face weights
-- official MiVOLO repository checkout
-- official DINOv2 repository checkout
-- InsightFace `buffalo_l` detection pack
+- shipped runtime dependencies:
+  - [`InsightFace`](https://github.com/deepinsight/insightface) and the [`buffalo_l` pack](https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip)
+  - [`DINOv2` official repository](https://github.com/facebookresearch/dinov2)
+- optional external inference path:
+  - [`MiVOLO V2 Hugging Face weights`](https://huggingface.co/iitolstykh/mivolo_v2)
+  - [`YOLO-Face-Person-Detector`](https://huggingface.co/iitolstykh/YOLO-Face-Person-Detector)
+  - [`MiVOLO` official repository](https://github.com/WildChlamydia/MiVOLO)
 
 See:
 
