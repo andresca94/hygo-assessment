@@ -144,7 +144,8 @@ def main() -> None:
 
             aux_minor_logits = torch.zeros_like(minor_logits)
             aux_uncertainty = torch.full_like(minor_logits, 0.5)
-            predicted_domains = list(batch["domain_type"])
+            source_domains = list(batch["domain_type"])
+            predicted_domains = list(source_domains)
             if aux_outputs is not None:
                 aux_minor_logits = aux_outputs["minor_logit"].detach().cpu()
                 aux_uncertainty = torch.sigmoid(aux_outputs["uncertainty_logit"].detach().cpu())
@@ -182,6 +183,8 @@ def main() -> None:
                     {
                         "image_path": batch["image_path"][index],
                         "source_dataset": batch["source_dataset"][index],
+                        "source_domain_type": source_domains[index],
+                        "predicted_domain_type": predicted_domains[index],
                         "domain_type": predicted_domains[index],
                         "age_bucket": batch["age_bucket"][index],
                         "quality_flags": ",".join(quality_flags),
@@ -208,7 +211,15 @@ def main() -> None:
     labeled = predictions[predictions["minor_label"].notna()].copy()
     metrics_payload: dict[str, object] = {"split": args.split, "row_count": int(len(predictions))}
     metrics_payload["verdict_counts"] = {str(key): int(value) for key, value in predictions["verdict"].value_counts().to_dict().items()}
-    metrics_payload["domain_counts"] = {str(key): int(value) for key, value in predictions["domain_type"].value_counts().to_dict().items()}
+    metrics_payload["source_dataset_counts"] = {
+        str(key): int(value) for key, value in predictions["source_dataset"].value_counts().to_dict().items()
+    }
+    metrics_payload["source_domain_counts"] = {
+        str(key): int(value) for key, value in predictions["source_domain_type"].value_counts().to_dict().items()
+    }
+    metrics_payload["predicted_domain_counts"] = {
+        str(key): int(value) for key, value in predictions["predicted_domain_type"].value_counts().to_dict().items()
+    }
     metrics_payload["policy_reason_counts"] = {
         str(key): int(value) for key, value in predictions["policy_reason"].value_counts().to_dict().items()
     }
@@ -261,7 +272,7 @@ def main() -> None:
         failures.to_csv(failure_dir / f"{args.split}_failures.csv", index=False)
 
     slice_source = labeled if not labeled.empty else predictions
-    slice_metrics = slice_source.groupby(["domain_type", "age_bucket"]).agg(
+    slice_metrics = slice_source.groupby(["source_domain_type", "predicted_domain_type", "age_bucket"]).agg(
         count=("p_minor", "size"),
         mean_p_minor=("p_minor", "mean"),
     )
