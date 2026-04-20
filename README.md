@@ -151,6 +151,14 @@ bash scripts/runpod_fetch_minimum_datasets.sh
 
 That script downloads the official FairFace train/validation images and label CSVs from the official project links, stages them under `data/raw/fairface`, and reruns dataset validation.
 
+If you want a stronger second training run with additional real age supervision, stage `UTKFace` as well:
+
+```bash
+bash scripts/runpod_fetch_utkface_dataset.sh
+```
+
+That helper downloads the official aligned-and-cropped `UTKFace` archive, extracts it under `data/raw/utkface`, and reruns dataset validation.
+
 To add AI-generated and cartoon robustness coverage after the baseline run:
 
 ```bash
