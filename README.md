@@ -119,6 +119,29 @@ curl -X POST http://127.0.0.1:3000/v1/age-safety/check \
   -F "file=@/absolute/path/to/sample.jpg"
 ```
 
+### Reviewer sample workflow
+
+If you want a quick unseen-image smoke test, place a small manual-review set under `reviewer_samples/` using the filenames listed in [`reviewer_samples/sample_manifest.json`](reviewer_samples/sample_manifest.json), then run:
+
+```bash
+python scripts/run_reviewer_samples.py
+```
+
+On Windows, if `python` is not on `PATH`, use:
+
+```powershell
+py -3 scripts/run_reviewer_samples.py
+```
+
+The script will:
+
+- call the public health endpoint
+- upload each available sample image to `POST /v1/age-safety/check`
+- write one JSON response per image under `reviewer_samples/results/`
+- run one batch request over all available samples
+
+This is intended to make reviewer testing easy once a handful of unseen images are dropped into the repo.
+
 ### 2. RunPod RTX 4090 workflow
 
 Recommended pod shape:

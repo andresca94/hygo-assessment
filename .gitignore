@@ -30,3 +30,4 @@ ml/training/outputs/checkpoints/
 ml/training/outputs/manifests/
 ml/training/outputs/cache/
 reports/metrics/robustness_predictions.csv
+reviewer_samples/results/

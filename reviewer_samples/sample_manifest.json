@@ -1,0 +1,50 @@
+[
+  {
+    "filename": "adult_face_1.jpg",
+    "category": "adult_face",
+    "description": "Single-face adult example",
+    "expected_behavior": "Usually safe unless the policy decides the face is ambiguous or low quality."
+  },
+  {
+    "filename": "minor_face_1.jpg",
+    "category": "minor_face",
+    "description": "Single-face younger-looking example",
+    "expected_behavior": "Usually flagged."
+  },
+  {
+    "filename": "adult_face_2.jpg",
+    "category": "adult_face",
+    "description": "Second single-face adult example",
+    "expected_behavior": "Usually safe unless the policy decides the face is ambiguous or low quality."
+  },
+  {
+    "filename": "cartoon_face_1.jpg",
+    "category": "cartoon_face",
+    "description": "Cartoon-style face example",
+    "expected_behavior": "Usually uncertain."
+  },
+  {
+    "filename": "anime_face_1.jpg",
+    "category": "anime_face",
+    "description": "Anime-style face example",
+    "expected_behavior": "Usually uncertain."
+  },
+  {
+    "filename": "no_face_1.jpg",
+    "category": "no_face",
+    "description": "No clearly visible face example",
+    "expected_behavior": "Should return uncertain_no_face or another uncertain verdict."
+  },
+  {
+    "filename": "minor_face_2.jpg",
+    "category": "minor_face",
+    "description": "Second younger-looking example",
+    "expected_behavior": "Usually flagged."
+  },
+  {
+    "filename": "multi_face_1.jpg",
+    "category": "multi_face",
+    "description": "Multi-person example",
+    "expected_behavior": "Image verdict should reflect the highest-risk detected face."
+  }
+]
