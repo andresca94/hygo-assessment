@@ -114,6 +114,8 @@ Rows without clear provenance or license context should be excluded from the tru
 - `gender`
 - `race`
 
+The exact bucket mapping and label helpers used by the pipeline are implemented in [ml/training/utils.py](ml/training/utils.py), and the sample-construction logic is implemented in [ml/training/datasets/face_dataset.py](ml/training/datasets/face_dataset.py).
+
 ## Age buckets
 
 - `0-12`
@@ -137,6 +139,18 @@ Records should be excluded or downgraded to weak supervision when:
 - provenance or license context is unclear
 - the item is a duplicate or near-duplicate
 
+The shipped manifest and deduplication outputs support that process:
+
+- [ml/training/outputs/manifests/master_manifest.csv](ml/training/outputs/manifests/master_manifest.csv)
+- [reports/metrics/deduplication_report.json](reports/metrics/deduplication_report.json)
+
+For the shipped merged manifest:
+
+- total rows after deduplication: `217,342`
+- removed duplicates: `356`
+- trusted rows: `87,288`
+- ambiguous or robustness-only rows: `130,054`
+
 ## Deduplication
 
 Deduplication is performed with:
@@ -155,6 +169,33 @@ The proof-of-concept target is intentionally small and auditable:
 - `2k-5k` for validation and testing
 
 Sampling should oversample hard slices instead of maximizing raw volume.
+
+The shipped split summary in [reports/metrics/split_summary.csv](reports/metrics/split_summary.csv) is:
+
+- `69,849` real-photo training rows
+- `8,717` real-photo validation rows
+- `8,722` real-photo test rows
+- `130,054` robustness rows
+
+Those robustness rows are intentionally separated from the main supervised training loop.
+
+## Why the dataset supports generalization
+
+The current generalization story is not “the labels cover the world.” It is:
+
+1. The trusted supervised core is clean and internally consistent.
+   - The shipped classifier is trained on real-photo `FairFace` rows only.
+   - Ambiguous `10-19` labels are downgraded rather than trusted.
+2. The hard decision boundary is represented explicitly.
+   - The repo uses age buckets that expose the legal boundary instead of hiding it inside a single adult class.
+3. The pipeline is designed to recognize uncertainty.
+   - quality tags become `quality_score`
+   - quality tags influence uncertainty supervision
+   - quality tags also influence per-sample weighting
+4. Non-real domains are used for robustness, not to inflate supervised coverage claims.
+5. Deduplication and split checks reduce leakage risk.
+
+This is why the shipped system generalizes reasonably well operationally even though it does not claim exhaustive label coverage: it combines a clean supervised core with conservative abstention under domain shift.
 
 ## Known limitations
 

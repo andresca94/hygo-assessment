@@ -70,6 +70,45 @@ The shipped checkpoint is trained in two stages:
 
 After validation inference, the pipeline fits a temperature scaler on raw validation logits and exports `calibration.json`. The policy layer then uses the calibrated `p_minor` score, the age interval, conflict score, face quality, and domain cues to emit `safe`, `flagged`, or `uncertain`.
 
+### Mathematical view of inference
+
+The most important scalar in the shipped system is the calibrated minor-risk score:
+
+$$
+p_{\text{minor}} = \sigma\left(\frac{z}{T}\right)
+$$
+
+where:
+
+- $z$ is the raw `minor_logit`
+- $T$ is the fitted temperature from [ml/training/outputs/exported/calibration.json](ml/training/outputs/exported/calibration.json)
+- $\sigma(\cdot)$ is the logistic sigmoid
+
+The exact fitting code is in [ml/training/scripts/calibrate.py](ml/training/scripts/calibrate.py), and the same calibrated quantity is consumed in:
+
+- [ml/training/scripts/evaluate.py](ml/training/scripts/evaluate.py)
+- [ml/inference/predictor.py](ml/inference/predictor.py)
+
+The policy does not trust the scalar age estimate as a point prediction. It widens it into an interval:
+
+$$
+\text{spread} = 2.5 + 5u + 2c
+$$
+
+$$
+\text{age\_interval} = [\max(0, \hat a - \text{spread}), \hat a + \text{spread}]
+$$
+
+where:
+
+- $\hat a$ is the model age estimate
+- $u$ is the auxiliary uncertainty score
+- $c = |p_{\text{minor}} - \hat p_{\text{minor,aux}}|$ is the conflict between the main and auxiliary models
+
+This is what makes the system safety-first in practice: disagreement and uncertainty directly make adult approval harder.
+
+For a full mathematical walkthrough with formulas and code references, see [METHODS_AND_METRICS.md](METHODS_AND_METRICS.md).
+
 ### Shipped policy defaults
 
 The shipped `policy.json` currently uses:
@@ -82,6 +121,70 @@ The shipped `policy.json` currently uses:
 - `max_conflict_score = 0.25`
 
 The `adult_safe_age_lower_bound` was relaxed from `21.0` to `20.0` after RunPod RTX 4090 reviewer-sample validation showed that the earlier rule was over-conservative on obvious adult faces. That change improved real-adult approval without changing the minor-risk thresholds.
+
+### Training labels, fine-tuning, and optimization
+
+The shipped label space is defined in [ml/training/utils.py](ml/training/utils.py):
+
+- `0-12`
+- `13-15`
+- `16-17`
+- `18-20`
+- `21-25`
+- `26+`
+
+The final trusted supervised baseline is intentionally simpler than the scaffold:
+
+- real-photo supervision comes from `FairFace`
+- ambiguous `10-19` FairFace labels are downgraded during data preparation rather than treated as exact legal-age truth
+- non-real domains are evaluated for robustness and abstention, not silently mixed into the main exact-age supervision
+
+The dataset implementation in [ml/training/datasets/face_dataset.py](ml/training/datasets/face_dataset.py) applies:
+
+- resize to `224 x 224`
+- `RandomHorizontalFlip(0.5)` during training
+- light `ColorJitter`
+- ImageNet normalization
+- extra sample weight for the `15-21` boundary band
+- extra sample weight for rows with quality flags
+
+The main-model objective in [ml/training/scripts/train_main.py](ml/training/scripts/train_main.py) is:
+
+$$
+\mathcal{L}_{\text{main}} =
+0.4 \cdot \mathcal{L}_{\text{reg}}
++ 0.3 \cdot \mathcal{L}_{\text{bucket}}
++ 0.3 \cdot \mathcal{L}_{\text{minor}}
+$$
+
+with:
+
+- SmoothL1 loss for scalar age regression
+- cross-entropy for age bucket prediction
+- binary cross-entropy with logits for minor-risk prediction
+
+The auxiliary-model objective in [ml/training/scripts/train_aux.py](ml/training/scripts/train_aux.py) is:
+
+$$
+\mathcal{L}_{\text{aux}} =
+0.45 \cdot \mathcal{L}_{\text{minor}}
++ 0.35 \cdot \mathcal{L}_{\text{domain}}
++ 0.20 \cdot \mathcal{L}_{\text{uncertainty}}
+$$
+
+The shipped hyperparameters in [ml/training/configs/base.yaml](ml/training/configs/base.yaml) are:
+
+- seed `42`
+- batch size `16`
+- eval batch size `32`
+- learning rate `3e-4`
+- weight decay `1e-4`
+- `AdamW`
+- `6` epochs
+- gradient accumulation `2`
+- mixed precision on CUDA
+
+The auxiliary `DINOv2` backbone is frozen in the shipped run. That means the fine-tuning process is intentionally shallow and stable: the pretrained encoder is reused as a robust feature extractor, and only the lightweight head is optimized for minor-risk, domain, and uncertainty supervision.
 
 ## Repository Layout
 
@@ -96,6 +199,7 @@ The `adult_safe_age_lower_bound` was relaxed from `21.0` to `20.0` after RunPod 
 ├── scripts/
 ├── DATA_CARD.md
 ├── DECISIONS.md
+├── METHODS_AND_METRICS.md
 ├── docker-compose.yml
 └── README.md
 ```
@@ -176,6 +280,104 @@ On the current shipped policy, the tracked reviewer set should behave roughly li
 - stylized examples: `uncertain`
 
 One known limitation remains: some AI-generated adult-looking faces can still return `safe` if the auxiliary domain head treats them as `real`.
+
+## Results and Visuals
+
+The shipped metrics are stored in:
+
+- [reports/metrics/val_metrics.json](reports/metrics/val_metrics.json)
+- [reports/metrics/test_metrics.json](reports/metrics/test_metrics.json)
+- [reports/metrics/robustness_metrics.json](reports/metrics/robustness_metrics.json)
+
+Headline shipped numbers:
+
+| Split | Rows | Precision | Recall | F1 | ROC AUC | PR AUC | Minor FNR |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Val | 8,717 | 0.8827 | 0.9700 | 0.9243 | 0.9953 | 0.9845 | 0.0300 |
+| Test | 8,722 | 0.8711 | 0.9737 | 0.9195 | 0.9959 | 0.9855 | 0.0263 |
+
+Those metrics come from [ml/training/scripts/evaluate.py](ml/training/scripts/evaluate.py), which also exports the prediction tables, subgroup metrics, calibration files, confusion matrices, and failure-analysis CSVs.
+
+The repo already includes score histograms and reliability diagrams, and now also includes additional generated figures from the shipped outputs:
+
+- ROC curves
+- precision-recall curves
+- rendered confusion matrices
+- split composition charts
+- robustness verdict charts
+- subgroup false-negative-rate charts
+
+You can regenerate those visual assets from the exported CSV/JSON artifacts with:
+
+```bash
+python scripts/generate_report_visuals.py
+```
+
+### Example figures
+
+#### Test ROC curve
+
+![Test ROC curve](reports/charts/test_roc_curve.png)
+
+#### Test precision-recall curve
+
+![Test precision-recall curve](reports/charts/test_pr_curve.png)
+
+#### Test confusion matrix
+
+![Test confusion matrix](reports/confusion_matrices/test_confusion_matrix.png)
+
+#### Robustness verdict counts
+
+![Robustness verdict counts](reports/charts/robustness_verdict_counts.png)
+
+### Metric definitions
+
+For the binary minor-risk framing:
+
+$$
+\text{precision} = \frac{TP}{TP + FP}
+$$
+
+$$
+\text{recall} = \frac{TP}{TP + FN}
+$$
+
+$$
+F_1 = \frac{2TP}{2TP + FP + FN}
+$$
+
+$$
+\text{minor false negative rate} = \frac{FN}{TP + FN}
+$$
+
+This matters more than top-line accuracy, because the dangerous error here is missing a minor.
+
+### Dataset quality and generalization
+
+The generalization story in this repo is not “the model learned every domain equally well.” It is stronger and more honest than that:
+
+1. Trusted exact-age supervision is kept clean.
+   - The shipped training/validation/test splits are real-photo `FairFace` rows.
+   - Ambiguous rows are downgraded instead of forced into trusted labels.
+   - Non-real data is kept in robustness evaluation rather than pretending it is exact legal-age ground truth.
+2. Cross-split leakage is actively reduced.
+   - [reports/metrics/deduplication_report.json](reports/metrics/deduplication_report.json) shows `356` duplicate removals from the merged manifest.
+3. The split structure is explicit.
+   - [reports/metrics/split_summary.csv](reports/metrics/split_summary.csv) shows `69,849` train rows, `8,717` val rows, `8,722` test rows, and `130,054` robustness rows.
+4. The training objective emphasizes hard cases.
+   - The `15-21` boundary region is upweighted.
+   - Quality-tagged rows receive extra weight.
+5. The deployed decision rule is allowed to abstain.
+   - That is why robustness rows mostly end up `uncertain` rather than being over-claimed as `safe`.
+
+For the shipped robustness split, the policy outcomes are:
+
+- `125,647` `uncertain`
+- `4,407` `flagged`
+- `0` `safe`
+
+That should be interpreted as conservative abstention under shift, not as a claim that the system has solved legal-age prediction on synthetic or stylized domains.
 
 ### 2. RunPod RTX 4090 workflow
 

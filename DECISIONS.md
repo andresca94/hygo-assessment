@@ -53,6 +53,8 @@ How the shipped data is processed and verified:
 
 In other words, label-quality handling in this repo is conservative by design: ambiguous ranges are downgraded, non-real data is kept out of exact-age supervision, and the final shipped checkpoint only relies on the cleanest reproducible subset.
 
+The exact bucket and label utilities live in [ml/training/utils.py](ml/training/utils.py), and the actual sample construction logic is in [ml/training/datasets/face_dataset.py](ml/training/datasets/face_dataset.py). That matters because the trusted-label story is not just prose: it is enforced in code.
+
 ## Model choices
 
 Preferred architecture:
@@ -130,6 +132,37 @@ Main model strategy:
   - choose the best checkpoint by validation `minor_recall`
   - break ties with lower validation loss
 
+Mathematically, the main-model objective implemented in [ml/training/scripts/train_main.py](ml/training/scripts/train_main.py) is:
+
+$$
+\mathcal{L}_{\text{main}} =
+0.4 \cdot \mathcal{L}_{\text{reg}}
++ 0.3 \cdot \mathcal{L}_{\text{bucket}}
++ 0.3 \cdot \mathcal{L}_{\text{minor}}
+$$
+
+where:
+
+$$
+\mathcal{L}_{\text{reg}} = \text{SmoothL1}(\hat a, a)
+$$
+
+$$
+\mathcal{L}_{\text{bucket}} = \text{CrossEntropy}(\hat y_{\text{bucket}}, y_{\text{bucket}})
+$$
+
+$$
+\mathcal{L}_{\text{minor}} = \text{BCEWithLogits}(\hat z_{\text{minor}}, y_{\text{minor}})
+$$
+
+and each term is reweighted by the sample weight constructed in [ml/training/datasets/face_dataset.py](ml/training/datasets/face_dataset.py):
+
+$$
+w_i = \max(1,\; w_{\text{boundary}} + 0.2 \cdot |\text{quality flags}_i|)
+$$
+
+with $w_{\text{boundary}} = 2.0$ for the `15-21` band and `1.0` otherwise.
+
 Auxiliary model strategy:
 
 - freeze the `DINOv2` backbone and train only the small head
@@ -140,12 +173,35 @@ Auxiliary model strategy:
 - derive the uncertainty target from image quality: lower-quality rows receive higher uncertainty supervision
 - again, select the exported checkpoint by validation `minor_recall`, with loss as the tie-breaker
 
+The auxiliary-model objective in [ml/training/scripts/train_aux.py](ml/training/scripts/train_aux.py) is:
+
+$$
+\mathcal{L}_{\text{aux}} =
+0.45 \cdot \mathcal{L}_{\text{minor}}
++ 0.35 \cdot \mathcal{L}_{\text{domain}}
++ 0.20 \cdot \mathcal{L}_{\text{uncertainty}}
+$$
+
+This is the core fine-tuning tradeoff of the shipped run:
+
+- the main model is fully optimized for age and minor-risk on real-photo supervision
+- the `DINOv2` auxiliary backbone is frozen, and only the small head is optimized
+- this makes the auxiliary path more stable on a limited dataset and reduces the chance of overfitting the domain classifier to a narrow robustness pool
+
 Calibration strategy:
 
 - run full validation inference first
 - fit a single temperature scaler on raw validation minor logits using `LBFGS`
 - export `calibration.json`
 - use the calibrated score for the policy engine rather than the raw logit
+
+More concretely, [ml/training/scripts/calibrate.py](ml/training/scripts/calibrate.py) fits:
+
+$$
+p_{\text{minor}} = \sigma\left(\frac{z}{T}\right)
+$$
+
+with `LBFGS`, where $z$ is the raw `minor_logit` and $T$ is the learned scalar temperature. For the shipped checkpoint, the exported temperature is `1.1242778301239014`.
 
 Why this training approach:
 
@@ -176,6 +232,29 @@ How to interpret the shipped metrics:
 - `roc_auc` and `pr_auc` show the score quality is high enough that policy tuning is meaningful
 - `verdict_counts` are policy outcomes, not direct classifier outputs
 
+In terms of confusion-matrix entries:
+
+$$
+\text{precision} = \frac{TP}{TP + FP}, \quad
+\text{recall} = \frac{TP}{TP + FN}, \quad
+F_1 = \frac{2TP}{2TP + FP + FN}
+$$
+
+and:
+
+$$
+\text{minor false negative rate} = \frac{FN}{TP + FN}
+$$
+
+Those exact quantities are computed in [ml/training/scripts/evaluate.py](ml/training/scripts/evaluate.py), which also exports:
+
+- ROC AUC
+- PR AUC
+- reliability diagrams
+- subgroup metrics
+- failure-analysis CSVs
+- split and robustness summaries
+
 The `UTKFace` ablation made this tradeoff explicit: it improved `minor_precision` but worsened `minor_recall` and produced unsafe behavior in teenage slices unless the adult-safe gate was tightened so aggressively that `safe` throughput collapsed. That is the reason it remains an ablation rather than the final policy target.
 
 ## Evaluation harness
@@ -205,6 +284,12 @@ What the shipped results show:
 - on held-out real-photo FairFace data, the model has strong score separation and high minor recall
 - on robustness data, the system mostly abstains rather than returning `safe`
 - the subgroup report is useful, but limited by the fact that shipped FairFace minors are concentrated in `0-12`
+
+The shipped artifacts support that claim directly:
+
+- [reports/metrics/test_metrics.json](reports/metrics/test_metrics.json): recall `0.9737`, ROC AUC `0.9959`, PR AUC `0.9855`
+- [reports/metrics/val_metrics.json](reports/metrics/val_metrics.json): recall `0.9700`, ROC AUC `0.9953`, PR AUC `0.9845`
+- [reports/metrics/robustness_metrics.json](reports/metrics/robustness_metrics.json): `125,647` `uncertain`, `4,407` `flagged`, `0` `safe`
 
 Important limitation I would call out explicitly in review:
 
@@ -254,6 +339,14 @@ The strategy is:
 - prefer `uncertain` when the domain signal is unstable or the auxiliary model conflicts with the main model
 
 This is deliberate. Synthetic and stylized datasets often do not provide reliable legal-age labels, so forcing them into the main supervision pool would make the model look broader while actually reducing trustworthiness.
+
+That is also why the current generalization story is mostly operational rather than purely representational. The model generalizes well because:
+
+- the trusted supervised core is clean
+- the hardest boundary region is upweighted
+- the minor-risk score is calibrated
+- the auxiliary model provides disagreement and uncertainty signals
+- the policy is allowed to abstain instead of over-claiming confidence
 
 For the shipped baseline, the robustness split produced:
 
