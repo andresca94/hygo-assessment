@@ -392,6 +392,48 @@ def plot_label_status_breakdown() -> None:
     save_close(fig, CHARTS_DIR / "label_status_breakdown.png")
 
 
+def plot_trusted_race_distribution() -> None:
+    manifest = pd.read_csv(MANIFESTS_DIR / "master_manifest.csv", low_memory=False)
+    trusted = manifest[manifest["label_status"] == "trusted"].copy()
+    trusted = trusted[trusted["race"].notna()].copy()
+    if trusted.empty:
+        return
+
+    trusted["minor_group"] = trusted["minor_label"].map({0.0: "adult_label", 1.0: "minor_label"}).fillna("unknown")
+    pivot = (
+        trusted.groupby(["race", "minor_group"])
+        .size()
+        .reset_index(name="count")
+        .pivot(index="race", columns="minor_group", values="count")
+        .fillna(0)
+    )
+    ordered_cols = [column for column in ("adult_label", "minor_label") if column in pivot.columns]
+    pivot = pivot[ordered_cols].sort_values(by=ordered_cols[-1], ascending=False)
+
+    fig, ax = plt.subplots(figsize=(8.6, 5.0))
+    colors = {
+        "adult_label": PALETTE["navy"],
+        "minor_label": PALETTE["amber"],
+    }
+    left = None
+    for column in ordered_cols:
+        values = pivot[column].values
+        ax.barh(
+            pivot.index,
+            values,
+            left=left,
+            color=colors.get(column, PALETTE["slate"]),
+            label=column.replace("_", " "),
+        )
+        left = values if left is None else left + values
+
+    ax.set_xlabel("Trusted rows")
+    ax.set_title("Trusted supervision by FairFace race label")
+    ax.legend(frameon=False, loc="lower right")
+    ax.invert_yaxis()
+    save_close(fig, CHARTS_DIR / "trusted_race_distribution.png")
+
+
 def plot_failure_reasons(split: str = "test") -> None:
     path = REPORTS_DIR / "failure_analysis" / f"{split}_failures.csv"
     if not path.exists():
@@ -551,6 +593,7 @@ def main() -> None:
     plot_manifest_source_counts()
     plot_trusted_age_bucket_counts()
     plot_label_status_breakdown()
+    plot_trusted_race_distribution()
     plot_failure_reasons("test")
     plot_training_dynamics("main")
     plot_training_dynamics("aux")

@@ -103,6 +103,10 @@ The label-status chart is the clearest visual summary of that choice. A large po
 
 ![Label status breakdown](reports/charts/label_status_breakdown.png)
 
+The race-distribution chart below is a dataset-composition view over the trusted supervised rows only. It shows how many source-provided FairFace race labels appear in the adult-labeled and minor-labeled subsets that actually feed the shipped evaluation path. This is useful because it makes the demographic coverage visible instead of leaving it implicit, but it should not be over-interpreted: these are source labels, not identity truth, and composition balance by itself is not the same thing as fairness.
+
+![Trusted race distribution](reports/charts/trusted_race_distribution.png)
+
 The repo does not redistribute the raw training images, so the gallery below uses tracked reviewer samples as representative examples of the same deployed input regimes. When `data/raw` exists locally, [scripts/generate_report_visuals.py](scripts/generate_report_visuals.py) will automatically replace this gallery with real dataset samples.
 
 ![Domain example gallery](reports/galleries/domain_example_gallery.png)

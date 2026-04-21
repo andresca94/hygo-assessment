@@ -244,18 +244,6 @@ On the current shipped policy, the tracked reviewer set should behave roughly li
 
 One known limitation remains: some AI-generated adult-looking faces can still return `safe` if the auxiliary domain head treats them as `real`.
 
-## Results and Visuals
-
-The shipped metrics, dataset snapshot tables, recovered training-dynamics plots, artifact inventory, and generalization analysis now live in [RESULTS_AND_VISUALS.md](RESULTS_AND_VISUALS.md).
-
-That page also documents how to regenerate the report assets with:
-
-```bash
-python scripts/generate_report_visuals.py
-```
-
-For formulas, metric definitions, and detailed figure walkthroughs, see [METHODS_AND_METRICS.md](METHODS_AND_METRICS.md).
-
 ### 2. RunPod RTX 4090 workflow
 
 Recommended pod shape:
