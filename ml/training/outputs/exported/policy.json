@@ -1,6 +1,7 @@
 {
   "safe_threshold": 0.05,
   "flagged_threshold": 0.4,
+  "adult_safe_age_lower_bound": 20.0,
   "minimum_face_confidence": 0.8,
   "low_face_area_threshold": 0.05,
   "max_conflict_score": 0.25

@@ -53,6 +53,7 @@ class AgeSafetyPredictor:
         defaults = {
             "safe_threshold": float(os.getenv("POLICY_SAFE_THRESHOLD", "0.05")),
             "flagged_threshold": float(os.getenv("POLICY_FLAGGED_THRESHOLD", "0.40")),
+            "adult_safe_age_lower_bound": float(os.getenv("POLICY_SAFE_AGE_LOWER_BOUND", "20.0")),
             "minimum_face_confidence": 0.80,
             "low_face_area_threshold": 0.05,
             "max_conflict_score": 0.25,

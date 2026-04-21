@@ -22,6 +22,7 @@ class FacePolicyInput:
 class PolicyConfig:
     safe_threshold: float
     flagged_threshold: float
+    adult_safe_age_lower_bound: float
     minimum_face_confidence: float
     low_face_area_threshold: float
     max_conflict_score: float
@@ -42,7 +43,11 @@ class PolicyEngine:
             return "uncertain", "non_photographic_domain"
         if payload.p_minor >= self.config.flagged_threshold or payload.age_interval[0] < 18.0:
             return "flagged", "minor_risk"
-        if payload.p_minor < self.config.safe_threshold and payload.age_interval[0] >= 21.0 and not payload.quality_flags:
+        if (
+            payload.p_minor < self.config.safe_threshold
+            and payload.age_interval[0] >= self.config.adult_safe_age_lower_bound
+            and not payload.quality_flags
+        ):
             return "safe", "confident_adult_face"
         return "uncertain", "boundary_or_quality_case"
 
