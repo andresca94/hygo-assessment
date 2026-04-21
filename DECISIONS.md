@@ -96,6 +96,55 @@ Model internals in the shipped checkpoint:
   - lightweight MLP head: `LayerNorm -> Dropout -> Linear -> GELU -> Dropout`
   - three outputs: minor-risk logit, domain logits, and uncertainty logit
 
+### Visual architecture
+
+End-to-end inference path:
+
+```mermaid
+flowchart LR
+    A["Input image"] --> B["InsightFace detection + alignment"]
+    B --> C["Aligned face crop"]
+    C --> D["Main model: MiVOLOAgeEstimator / EfficientNet-B0"]
+    C --> E["Aux model: DINOv2 auxiliary head"]
+    D --> F["age, bucket_logits, minor_logit"]
+    E --> G["aux minor_logit, domain_logits, uncertainty_logit"]
+    F --> H["Calibration + interval construction"]
+    G --> H
+    H --> I["Policy engine"]
+    I --> J["safe / uncertain / flagged"]
+```
+
+Main model graph, implemented in [ml/training/models/mivolo_wrapper.py](ml/training/models/mivolo_wrapper.py):
+
+```mermaid
+flowchart TD
+    A["224x224 RGB face crop"] --> B["tf_efficientnet_b0 backbone"]
+    B --> C["Global pooled feature vector"]
+    C --> D["LayerNorm"]
+    D --> E["Dropout(0.2)"]
+    E --> F["Age head: Linear -> scalar age"]
+    E --> G["Bucket head: Linear -> 6 age buckets"]
+    E --> H["Minor head: Linear -> minor_logit"]
+```
+
+Auxiliary model graph, implemented in [ml/training/models/dinov2_head.py](ml/training/models/dinov2_head.py):
+
+```mermaid
+flowchart TD
+    A["224x224 RGB face crop"] --> B["DINOv2 encoder"]
+    B --> C["Feature vector"]
+    C --> D["LayerNorm"]
+    D --> E["Dropout(0.2)"]
+    E --> F["Linear(feature_dim -> feature_dim/2)"]
+    F --> G["GELU"]
+    G --> H["Dropout(0.2)"]
+    H --> I["Minor head -> aux minor_logit"]
+    H --> J["Domain head -> 7 domain logits"]
+    H --> K["Uncertainty head -> uncertainty_logit"]
+```
+
+The diagrams above reflect the exact shipped code path. The main model is intentionally small and task-specific after the backbone. The auxiliary model is intentionally shallow after the encoder because its job is not precise age estimation; it is disagreement, domain, and uncertainty estimation.
+
 This architecture was chosen because it separates two different jobs:
 
 - the main model estimates age-like signals on real photographic faces
@@ -106,6 +155,43 @@ That separation is more defensible for a safety system than trying to make a sin
 ## Training strategy
 
 The training pipeline is intentionally simple, auditable, and recall-first.
+
+### Fine-tuning map
+
+The shipped baseline is not a single end-to-end joint fine-tuning run. It is a staged fine-tuning process:
+
+```mermaid
+flowchart TD
+    A["Stage 1: Main model initialization"] --> B["Pretrained EfficientNet-B0 backbone"]
+    B --> C["Attach age / bucket / minor heads"]
+    C --> D["Train full main model on trusted real-photo supervision"]
+    D --> E["Select best checkpoint by validation minor_recall"]
+    E --> F["Run validation inference"]
+    F --> G["Fit temperature scaler"]
+    G --> H["Export main_best.pt + calibration.json"]
+
+    I["Stage 2: Auxiliary model initialization"] --> J["Pretrained DINOv2 encoder"]
+    J --> K["Freeze encoder weights"]
+    K --> L["Attach small MLP + minor/domain/uncertainty heads"]
+    L --> M["Train head only"]
+    M --> N["Select best checkpoint by validation minor_recall"]
+    N --> O["Export aux_best.pt"]
+```
+
+Operationally, the shipped fine-tuning choices are:
+
+- main model:
+  - pretrained backbone: yes
+  - trainable backbone: yes
+  - trainable heads: yes
+  - objective: age regression + age buckets + minor-risk
+- auxiliary model:
+  - pretrained backbone: yes
+  - trainable backbone: no
+  - trainable head: yes
+  - objective: minor-risk + domain classification + uncertainty
+
+So the main model is fully fine-tuned, while the auxiliary model is only partially fine-tuned. That distinction is deliberate. The age-estimation task benefits from adapting the full feature extractor, but the auxiliary domain/uncertainty path is more stable when the strong pretrained DINOv2 encoder is frozen and only the lightweight head is adapted.
 
 Main model strategy:
 
