@@ -70,44 +70,7 @@ The shipped checkpoint is trained in two stages:
 
 After validation inference, the pipeline fits a temperature scaler on raw validation logits and exports `calibration.json`. The policy layer then uses the calibrated `p_minor` score, the age interval, conflict score, face quality, and domain cues to emit `safe`, `flagged`, or `uncertain`.
 
-### Mathematical view of inference
-
-The most important scalar in the shipped system is the calibrated minor-risk score:
-
-$$
-p_{\text{minor}} = \sigma\left(\frac{z}{T}\right)
-$$
-
-where:
-
-- $z$ is the raw `minor_logit`
-- $T$ is the fitted temperature from [ml/training/outputs/exported/calibration.json](ml/training/outputs/exported/calibration.json)
-- $\sigma(\cdot)$ is the logistic sigmoid
-
-The exact fitting code is in [ml/training/scripts/calibrate.py](ml/training/scripts/calibrate.py), and the same calibrated quantity is consumed in:
-
-- [ml/training/scripts/evaluate.py](ml/training/scripts/evaluate.py)
-- [ml/inference/predictor.py](ml/inference/predictor.py)
-
-The policy does not trust the scalar age estimate as a point prediction. It widens it into an interval:
-
-$$
-\text{spread} = 2.5 + 5u + 2c
-$$
-
-$$
-\text{age\_interval} = [\max(0, \hat a - \text{spread}), \hat a + \text{spread}]
-$$
-
-where:
-
-- $\hat a$ is the model age estimate
-- $u$ is the auxiliary uncertainty score
-- $c = |p_{\text{minor}} - \hat p_{\text{minor,aux}}|$ is the conflict between the main and auxiliary models
-
-This is what makes the system safety-first in practice: disagreement and uncertainty directly make adult approval harder.
-
-For a full mathematical walkthrough with formulas and code references, see [METHODS_AND_METRICS.md](METHODS_AND_METRICS.md).
+The exact mathematical view of inference, including the calibrated `p_minor` formula, the age-interval construction, and the policy equations, now lives in [METHODS_AND_METRICS.md](METHODS_AND_METRICS.md).
 
 ### Shipped policy defaults
 
@@ -283,101 +246,15 @@ One known limitation remains: some AI-generated adult-looking faces can still re
 
 ## Results and Visuals
 
-The shipped metrics are stored in:
+The shipped metrics, dataset snapshot tables, recovered training-dynamics plots, artifact inventory, and generalization analysis now live in [RESULTS_AND_VISUALS.md](RESULTS_AND_VISUALS.md).
 
-- [reports/metrics/val_metrics.json](reports/metrics/val_metrics.json)
-- [reports/metrics/test_metrics.json](reports/metrics/test_metrics.json)
-- [reports/metrics/robustness_metrics.json](reports/metrics/robustness_metrics.json)
-
-Headline shipped numbers:
-
-| Split | Rows | Precision | Recall | F1 | ROC AUC | PR AUC | Minor FNR |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Val | 8,717 | 0.8827 | 0.9700 | 0.9243 | 0.9953 | 0.9845 | 0.0300 |
-| Test | 8,722 | 0.8711 | 0.9737 | 0.9195 | 0.9959 | 0.9855 | 0.0263 |
-
-Those metrics come from [ml/training/scripts/evaluate.py](ml/training/scripts/evaluate.py), which also exports the prediction tables, subgroup metrics, calibration files, confusion matrices, and failure-analysis CSVs.
-
-The repo already includes score histograms and reliability diagrams, and now also includes additional generated figures from the shipped outputs:
-
-- ROC curves
-- precision-recall curves
-- rendered confusion matrices
-- split composition charts
-- robustness verdict charts
-- subgroup false-negative-rate charts
-
-You can regenerate those visual assets from the exported CSV/JSON artifacts with:
+That page also documents how to regenerate the report assets with:
 
 ```bash
 python scripts/generate_report_visuals.py
 ```
 
-### Example figures
-
-#### Test ROC curve
-
-![Test ROC curve](reports/charts/test_roc_curve.png)
-
-#### Test precision-recall curve
-
-![Test precision-recall curve](reports/charts/test_pr_curve.png)
-
-#### Test confusion matrix
-
-![Test confusion matrix](reports/confusion_matrices/test_confusion_matrix.png)
-
-#### Robustness verdict counts
-
-![Robustness verdict counts](reports/charts/robustness_verdict_counts.png)
-
-### Metric definitions
-
-For the binary minor-risk framing:
-
-$$
-\text{precision} = \frac{TP}{TP + FP}
-$$
-
-$$
-\text{recall} = \frac{TP}{TP + FN}
-$$
-
-$$
-F_1 = \frac{2TP}{2TP + FP + FN}
-$$
-
-$$
-\text{minor false negative rate} = \frac{FN}{TP + FN}
-$$
-
-This matters more than top-line accuracy, because the dangerous error here is missing a minor.
-
-### Dataset quality and generalization
-
-The generalization story in this repo is not “the model learned every domain equally well.” It is stronger and more honest than that:
-
-1. Trusted exact-age supervision is kept clean.
-   - The shipped training/validation/test splits are real-photo `FairFace` rows.
-   - Ambiguous rows are downgraded instead of forced into trusted labels.
-   - Non-real data is kept in robustness evaluation rather than pretending it is exact legal-age ground truth.
-2. Cross-split leakage is actively reduced.
-   - [reports/metrics/deduplication_report.json](reports/metrics/deduplication_report.json) shows `356` duplicate removals from the merged manifest.
-3. The split structure is explicit.
-   - [reports/metrics/split_summary.csv](reports/metrics/split_summary.csv) shows `69,849` train rows, `8,717` val rows, `8,722` test rows, and `130,054` robustness rows.
-4. The training objective emphasizes hard cases.
-   - The `15-21` boundary region is upweighted.
-   - Quality-tagged rows receive extra weight.
-5. The deployed decision rule is allowed to abstain.
-   - That is why robustness rows mostly end up `uncertain` rather than being over-claimed as `safe`.
-
-For the shipped robustness split, the policy outcomes are:
-
-- `125,647` `uncertain`
-- `4,407` `flagged`
-- `0` `safe`
-
-That should be interpreted as conservative abstention under shift, not as a claim that the system has solved legal-age prediction on synthetic or stylized domains.
+For formulas, metric definitions, and detailed figure walkthroughs, see [METHODS_AND_METRICS.md](METHODS_AND_METRICS.md).
 
 ### 2. RunPod RTX 4090 workflow
 
@@ -525,6 +402,8 @@ Current recommended final candidate metrics from the `FairFace` baseline:
 - `roc_auc`: `0.9959`
 - `pr_auc`: `0.9855`
 
+Interpretation: this shipped baseline catches almost all minors in the held-out real-photo test split while keeping the score ranking clean enough for calibration and policy gating. The key number is not `roc_auc` by itself; it is the combination of high `minor_recall` and low `minor_false_negative_rate`.
+
 Validation metrics for the same shipped checkpoint:
 
 - `minor_precision`: `0.8827`
@@ -533,6 +412,8 @@ Validation metrics for the same shipped checkpoint:
 - `minor_false_negative_rate`: `0.0300`
 - `roc_auc`: `0.9953`
 - `pr_auc`: `0.9845`
+
+Interpretation: validation and test numbers are close, which is what I want to see in a small, auditable baseline. It suggests the policy is not depending on a brittle validation-only effect.
 
 The shipped baseline weights used for local inference are included at:
 
@@ -846,14 +727,15 @@ bash scripts/install_inference_bundle.sh <bundle.tar.gz-or-url>
 
 - Dataset and provenance rationale: [`DATA_CARD.md`](DATA_CARD.md)
 - System and policy rationale: [`DECISIONS.md`](DECISIONS.md)
-- Assessment-question coverage in `DECISIONS.md`:
-  - dataset choices and rejected alternatives
-  - model architecture and training strategy
-  - threshold decisions
-  - evaluation harness, calibration, and failure analysis
-  - bias analysis
-  - real vs generated images
-  - integration design for each platform touchpoint
-  - production concerns
-  - what I would do with more time
+- Methods, formulas, calibration, and metric interpretation: [`METHODS_AND_METRICS.md`](METHODS_AND_METRICS.md)
+- Shipped metrics, visual artifacts, dataset snapshots, and recovered training curves: [`RESULTS_AND_VISUALS.md`](RESULTS_AND_VISUALS.md)
+- Assessment-question coverage across the docs:
+  - dataset choices and rejected alternatives: [`DECISIONS.md`](DECISIONS.md), [`DATA_CARD.md`](DATA_CARD.md)
+  - model architecture and training strategy: [`DECISIONS.md`](DECISIONS.md), [`METHODS_AND_METRICS.md`](METHODS_AND_METRICS.md)
+  - threshold decisions: [`DECISIONS.md`](DECISIONS.md), [`METHODS_AND_METRICS.md`](METHODS_AND_METRICS.md)
+  - evaluation harness, calibration, failure analysis, and shipped outputs: [`METHODS_AND_METRICS.md`](METHODS_AND_METRICS.md), [`RESULTS_AND_VISUALS.md`](RESULTS_AND_VISUALS.md)
+  - bias analysis: [`DECISIONS.md`](DECISIONS.md)
+  - real vs generated images: [`DECISIONS.md`](DECISIONS.md), [`DATA_CARD.md`](DATA_CARD.md), [`RESULTS_AND_VISUALS.md`](RESULTS_AND_VISUALS.md)
+  - integration design for each platform touchpoint: [`DECISIONS.md`](DECISIONS.md)
+  - production concerns and next steps: [`DECISIONS.md`](DECISIONS.md)
 - Pod bootstrap checklist: [`RUNPOD_CHECKLIST.md`](RUNPOD_CHECKLIST.md)

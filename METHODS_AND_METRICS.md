@@ -262,6 +262,23 @@ This is implemented in both:
 - [ml/training/scripts/train_main.py](ml/training/scripts/train_main.py)
 - [ml/training/scripts/train_aux.py](ml/training/scripts/train_aux.py)
 
+### Optimization history figures
+
+The training scripts write per-epoch JSON logs to:
+
+- [ml/training/outputs/history/main_history.json](ml/training/outputs/history/main_history.json)
+- [ml/training/outputs/history/aux_history.json](ml/training/outputs/history/aux_history.json)
+
+The recovered history in this repo corresponds to the RunPod 4090 training configuration in [ml/training/configs/runpod_4090.yaml](ml/training/configs/runpod_4090.yaml), which overrides the base config to train for `10` epochs instead of `6`.
+
+The main-model plot below is the clearest picture of the optimization tradeoff. Training loss falls steadily, validation loss moves in a narrower and noisier band, and validation recall remains high enough that the final epoch is still the best export candidate. That behavior is consistent with a recall-first training target on a relatively small, curated supervised slice: the model keeps learning useful boundary information even when the validation loss is no longer monotonically improving.
+
+![Main training dynamics](reports/charts/main_training_dynamics.png)
+
+The auxiliary-model plot is intentionally calmer. Because the DINOv2 encoder is frozen and only the lightweight head is updated, the optimization does not roam as aggressively as the main model. The best auxiliary recall arrives before the final epoch, which is exactly why the training script tracks validation recall directly and exports the best checkpoint rather than blindly taking the last one.
+
+![Aux training dynamics](reports/charts/aux_training_dynamics.png)
+
 ## 9. Metric definitions
 
 For the binary minor-risk framing:
@@ -289,6 +306,16 @@ $$
 \text{false negative rate} = \frac{FN}{TP + FN}
 $$
 
+Interpretation in this repository:
+
+- `precision` tells us how often a "minor" prediction is justified. This is mostly a throughput and reviewer-burden question.
+- `recall` tells us how often the system catches minors. This is the main safety question.
+- `F1` gives a compact summary of both, but it is not the primary product objective because it weights misses and false alarms more evenly than the moderation problem does.
+- `false negative rate` is the operational danger statistic: the share of minors still missed by the binary classifier.
+- `ROC AUC` measures whether the raw score ranks minors above adults well across thresholds.
+- `PR AUC` measures the same ranking quality with explicit focus on the positive class, which is usually more informative than accuracy in this task.
+- `accuracy` is intentionally not the headline metric because class balance can make it look flattering while still hiding unsafe minor misses.
+
 The implementation lives in [ml/training/scripts/evaluate.py](ml/training/scripts/evaluate.py), which also computes:
 
 - ROC AUC
@@ -314,6 +341,8 @@ From:
 - PR AUC: `0.9845`
 - false negative rate: `0.0300`
 
+Interpretation: on validation, the shipped classifier already catches almost all minors, and only about three percent of minors remain missed at the binary threshold. That makes the policy-tuning stage worth doing, because it starts from a high-recall score rather than trying to rescue a weak classifier.
+
 ### Test
 
 - row count: `8,722`
@@ -323,6 +352,20 @@ From:
 - ROC AUC: `0.9959`
 - PR AUC: `0.9855`
 - false negative rate: `0.0263`
+
+Interpretation: the test split is slightly better than validation on recall and false negative rate, which suggests the shipped baseline is not leaning on a fragile validation-only artifact. The main safety takeaway is that the held-out real-photo miss rate stays low.
+
+### Test ROC curve
+
+<img src="reports/charts/test_roc_curve.png" alt="Test ROC curve" />
+
+The ROC curve shows that the raw minor-risk score separates minors from adults cleanly before the policy layer adds abstention logic. Its near-top-left shape and very high AUC mean that the model usually assigns larger scores to minors than to adults across a wide range of possible thresholds. In this repository that matters because calibration and policy tuning only help if the underlying ranking is already strong; otherwise, changing thresholds would just reshuffle bad scores rather than refine a reliable signal.
+
+### Test precision-recall curve
+
+<img src="reports/charts/test_pr_curve.png" alt="Test precision-recall curve" />
+
+The precision-recall curve is the more decision-relevant plot for this problem because the positive class is "minor." It tells us how aggressively the system can chase minor recall before adult false alarms become excessive. The strong area under this curve means the model can keep recall high without precision collapsing, which is exactly the regime needed for a conservative moderation aid: catch most minors first, then let policy decide where to abstain rather than pretending the classifier alone solves the whole deployment problem.
 
 The confusion matrices in:
 
@@ -340,6 +383,8 @@ $$
 \end{bmatrix}
 $$
 
+The `41` in the bottom-left position are the validation minors that the binary classifier still missed. That cell is the one that matters most in this repository because it maps directly to dangerous false negatives. The rest of the matrix matters too, but primarily as the price paid to keep that miss count low enough for a safety-first operating point.
+
 ### Test confusion matrix
 
 $$
@@ -348,6 +393,14 @@ $$
 36 & 1331
 \end{bmatrix}
 $$
+
+<img src="reports/confusion_matrices/test_confusion_matrix.png" alt="Test confusion matrix" />
+
+The `36` in the bottom-left position are the held-out test minors that slipped through. The fact that this number stays low while the classifier still recovers a large number of true minors in the bottom-right cell is the main reason the `FairFace` baseline remained the shipped candidate. In other words, the matrix supports the same decision as the scalar metrics: this checkpoint is not perfect, but it is conservative in the direction that matters most.
+
+The failure-reason chart adds one more layer of interpretation. The important observation is that many residual bad rows are not cleanly wrong `safe` decisions; they are rows pushed into abstention because of model conflict or boundary ambiguity. That is a much better residual failure mode for a moderation aid than quiet adult approvals on minors.
+
+![Test failure reasons](reports/charts/test_failure_reasons.png)
 
 ## 11. Robustness interpretation
 
@@ -366,6 +419,10 @@ From [reports/metrics/robustness_metrics.json](reports/metrics/robustness_metric
 - `safe`: `0`
 
 This is evidence of conservative abstention, not evidence that the system can estimate exact legal age on non-real domains.
+
+<img src="reports/charts/robustness_verdict_counts.png" alt="Robustness verdict counts" />
+
+This chart should not be read as ordinary supervised accuracy because the robustness split is intentionally full of domain-shifted rows where exact legal-age supervision is not trusted enough to support standard classification scoring. The important behavior is that the policy almost never emits `safe` under shift and instead pushes most rows into `uncertain`. That is the desired outcome here: when the input is synthetic, stylized, edited, or otherwise out of distribution, the system should abstain rather than convert weak evidence into false confidence.
 
 ## 12. Why the shipped baseline generalizes as well as it does
 

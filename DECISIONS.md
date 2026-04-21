@@ -100,48 +100,21 @@ Model internals in the shipped checkpoint:
 
 End-to-end inference path:
 
-```mermaid
-flowchart LR
-    A["Input image"] --> B["InsightFace detection + alignment"]
-    B --> C["Aligned face crop"]
-    C --> D["Main model: MiVOLOAgeEstimator / EfficientNet-B0"]
-    C --> E["Aux model: DINOv2 auxiliary head"]
-    D --> F["age, bucket_logits, minor_logit"]
-    E --> G["aux minor_logit, domain_logits, uncertainty_logit"]
-    F --> H["Calibration + interval construction"]
-    G --> H
-    H --> I["Policy engine"]
-    I --> J["safe / uncertain / flagged"]
-```
+![System inference architecture](reports/diagrams/system_inference_architecture.png)
+
+The deployed path is deliberately separated into perception, dual-model scoring, and policy output. That separation is not cosmetic. It captures the core design decision in this repository: the final API response is not "whatever the age model predicted," but a calibrated policy verdict produced after combining age-like evidence, uncertainty, and disagreement handling. The figure is therefore a structural argument for why the system can abstain safely instead of forcing every input into a binary adult/minor decision.
 
 Main model graph, implemented in [ml/training/models/mivolo_wrapper.py](ml/training/models/mivolo_wrapper.py):
 
-```mermaid
-flowchart TD
-    A["224x224 RGB face crop"] --> B["tf_efficientnet_b0 backbone"]
-    B --> C["Global pooled feature vector"]
-    C --> D["LayerNorm"]
-    D --> E["Dropout(0.2)"]
-    E --> F["Age head: Linear -> scalar age"]
-    E --> G["Bucket head: Linear -> 6 age buckets"]
-    E --> H["Minor head: Linear -> minor_logit"]
-```
+![Main model architecture](reports/diagrams/main_model_architecture.png)
+
+The main model is the part that learns age-like structure from trusted real-photo supervision. The head remains small and task-specific on purpose: one branch estimates continuous age, one branch predicts coarse buckets, and one branch produces the minor-risk logit that later enters the policy layer. That structure matters because it keeps the model interpretable enough to audit. The deployment question is not only "what age did the model think this was," but also "did the model show a stable adult-vs-minor signal, or did it remain borderline?"
 
 Auxiliary model graph, implemented in [ml/training/models/dinov2_head.py](ml/training/models/dinov2_head.py):
 
-```mermaid
-flowchart TD
-    A["224x224 RGB face crop"] --> B["DINOv2 encoder"]
-    B --> C["Feature vector"]
-    C --> D["LayerNorm"]
-    D --> E["Dropout(0.2)"]
-    E --> F["Linear(feature_dim -> feature_dim/2)"]
-    F --> G["GELU"]
-    G --> H["Dropout(0.2)"]
-    H --> I["Minor head -> aux minor_logit"]
-    H --> J["Domain head -> 7 domain logits"]
-    H --> K["Uncertainty head -> uncertainty_logit"]
-```
+![Auxiliary model architecture](reports/diagrams/aux_model_architecture.png)
+
+The auxiliary model is intentionally shallow after the encoder because its role is not precise age estimation. Its job is to signal whether the input looks unstable, off-distribution, or disagreement-prone, which is why it produces domain and uncertainty outputs instead of another full age head. This is also why freezing the encoder is defensible in the shipped baseline: the system benefits more from a stable pretrained representation plus a lightweight task head than from aggressively adapting a second large backbone on limited safety-oriented supervision.
 
 The diagrams above reflect the exact shipped code path. The main model is intentionally small and task-specific after the backbone. The auxiliary model is intentionally shallow after the encoder because its job is not precise age estimation; it is disagreement, domain, and uncertainty estimation.
 
@@ -160,23 +133,9 @@ The training pipeline is intentionally simple, auditable, and recall-first.
 
 The shipped baseline is not a single end-to-end joint fine-tuning run. It is a staged fine-tuning process:
 
-```mermaid
-flowchart TD
-    A["Stage 1: Main model initialization"] --> B["Pretrained EfficientNet-B0 backbone"]
-    B --> C["Attach age / bucket / minor heads"]
-    C --> D["Train full main model on trusted real-photo supervision"]
-    D --> E["Select best checkpoint by validation minor_recall"]
-    E --> F["Run validation inference"]
-    F --> G["Fit temperature scaler"]
-    G --> H["Export main_best.pt + calibration.json"]
+![Fine-tuning map](reports/diagrams/fine_tuning_map.png)
 
-    I["Stage 2: Auxiliary model initialization"] --> J["Pretrained DINOv2 encoder"]
-    J --> K["Freeze encoder weights"]
-    K --> L["Attach small MLP + minor/domain/uncertainty heads"]
-    L --> M["Train head only"]
-    M --> N["Select best checkpoint by validation minor_recall"]
-    N --> O["Export aux_best.pt"]
-```
+The training flow is staged because the main age/minor-risk path and the auxiliary uncertainty path have different jobs and should not be optimized with the same level of freedom. The main model is allowed to adapt aggressively because it is learning the core supervised age/minor signal. The auxiliary path is kept more constrained so that it remains a stability signal rather than becoming a second brittle classifier. In practical terms, the figure shows why the shipped system is not just "two models trained together," but a sequence of choices aimed at protecting recall first and then calibrating confidence.
 
 Operationally, the shipped fine-tuning choices are:
 
@@ -317,6 +276,7 @@ How to interpret the shipped metrics:
 - `minor_precision` matters, but is secondary to avoiding dangerous misses
 - `roc_auc` and `pr_auc` show the score quality is high enough that policy tuning is meaningful
 - `verdict_counts` are policy outcomes, not direct classifier outputs
+- `accuracy` is intentionally not the lead statistic, because it can stay high even when the system still misses too many minors on an adult-heavy split
 
 In terms of confusion-matrix entries:
 
@@ -331,6 +291,15 @@ and:
 $$
 \text{minor false negative rate} = \frac{FN}{TP + FN}
 $$
+
+In problem terms:
+
+- `precision` asks whether minor flags are usually justified.
+- `recall` asks whether minors are actually being caught.
+- `F1` is a compact balance statistic, but it is not the top decision criterion here.
+- `minor false negative rate` is the direct "how often do minors slip through?" measure.
+- `ROC AUC` says whether the ranking of raw scores is strong across all possible thresholds.
+- `PR AUC` says whether the model can keep minors near the top of the ranking without immediately drowning in false alarms.
 
 Those exact quantities are computed in [ml/training/scripts/evaluate.py](ml/training/scripts/evaluate.py), which also exports:
 
@@ -376,6 +345,12 @@ The shipped artifacts support that claim directly:
 - [reports/metrics/test_metrics.json](reports/metrics/test_metrics.json): recall `0.9737`, ROC AUC `0.9959`, PR AUC `0.9855`
 - [reports/metrics/val_metrics.json](reports/metrics/val_metrics.json): recall `0.9700`, ROC AUC `0.9953`, PR AUC `0.9845`
 - [reports/metrics/robustness_metrics.json](reports/metrics/robustness_metrics.json): `125,647` `uncertain`, `4,407` `flagged`, `0` `safe`
+
+Those numbers matter because they show three different things at once:
+
+- the binary minor-risk score separates minors from adults well on held-out real photos
+- the selected threshold keeps minor misses low
+- the policy layer abstains aggressively under domain shift instead of manufacturing false confidence
 
 Important limitation I would call out explicitly in review:
 

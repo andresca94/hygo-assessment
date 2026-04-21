@@ -68,6 +68,45 @@ Scaffolded for future robustness expansion:
 - [`DigiFace-1M`](https://microsoft.github.io/DigiFace1M/)
 - `TrueFace`, subject to access and license review
 
+## Shipped data snapshot
+
+The artifacts in this repo are strong enough to show the dataset composition directly rather than only describing it.
+
+| Source | Evidence in the repo | Domain | Shipped role |
+| --- | ---: | --- | --- |
+| FairFace | 97,537 rows in `master_manifest.csv` | `real` | trusted supervision, validation, test, and real-photo robustness reference |
+| DeepFakeFace | 60,000 rows in `master_manifest.csv` | `ai_generated` | robustness-only evaluation |
+| iCartoonFace | 59,805 rows in `master_manifest.csv` | `cartoon` | robustness-only evaluation |
+| UTKFace | 23,705 images in `source_validation.json` | `real` | available for ablation, but not used in the shipped manifest |
+
+The validation table below is parsed from [ml/training/outputs/manifests/source_validation.json](ml/training/outputs/manifests/source_validation.json). It is useful because it separates "the code knows about this source" from "this source was actually present and usable in the run that generated the shipped reports."
+
+![Source validation table](reports/tables/source_validation_table.png)
+
+The split summary below is derived from [ml/training/outputs/manifests/master_manifest.csv](ml/training/outputs/manifests/master_manifest.csv). It shows the most important structural property of the dataset: the supervised splits are real-photo only, while the large robustness partition is a separate evaluation target rather than silent training data.
+
+![Split summary table](reports/tables/split_summary_table.png)
+
+The manifest preview is a compact example of what a row really looks like after preparation, deduplication, and splitting. Seeing the schema this way makes it clear that provenance, domain, label status, and demographics are all carried together into evaluation and failure analysis.
+
+![Manifest preview table](reports/tables/manifest_preview_table.png)
+
+This count chart makes the source mix legible at a glance. `FairFace` supplies the trusted supervision. `DeepFakeFace` and `iCartoonFace` expand the robustness surface, but they are intentionally kept out of exact-age supervision.
+
+![Manifest source counts](reports/charts/manifest_source_dataset_counts.png)
+
+The age-bucket chart shows why the shipped system has to be conservative near the legal boundary. Trusted supervision in the exported manifest is strongest for `0-12`, `21-25`, and `26+`, while the sensitive teenage buckets are not over-claimed as clean labels in the final shipped run.
+
+![Trusted age-bucket counts](reports/charts/trusted_age_bucket_counts.png)
+
+The label-status chart is the clearest visual summary of that choice. A large portion of the merged manifest is deliberately marked ambiguous or robustness-only, which is exactly what keeps the supervised story honest.
+
+![Label status breakdown](reports/charts/label_status_breakdown.png)
+
+The repo does not redistribute the raw training images, so the gallery below uses tracked reviewer samples as representative examples of the same deployed input regimes. When `data/raw` exists locally, [scripts/generate_report_visuals.py](scripts/generate_report_visuals.py) will automatically replace this gallery with real dataset samples.
+
+![Domain example gallery](reports/galleries/domain_example_gallery.png)
+
 ## Provenance and licensing
 
 Each source must be documented in the generated source manifest with:
