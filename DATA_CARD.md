@@ -34,6 +34,10 @@ Shipped supervised source:
 
 - [`FairFace`](https://github.com/joojs/fairface)
 
+The FairFace example panel below grounds the shipped supervised source in concrete real-photo inputs. This is the distribution that actually drives the released checkpoint: aligned human face crops with broad demographic coverage, relatively clean labeling, and enough visual diversity to support calibration and subgroup analysis without pretending to solve the hardest out-of-domain cases through supervision alone.
+
+![FairFace examples](reports/galleries/fairface_examples.png)
+
 Evaluated ablation only:
 
 - [`UTKFace`](https://susanqq.github.io/UTKFace/)
@@ -58,6 +62,14 @@ Used in the shipped robustness report:
 
 - [`DeepFakeFace`](https://github.com/OpenRL-Lab/DeepFakeFace)
 - [`iCartoonFace`](https://github.com/luxiangju-PersonAI/iCartoonFace)
+
+The `DeepFakeFace` montage below shows the AI-generated regime used in the shipped robustness evaluation. Its value here is not exact legal-age supervision; it is pressure-testing the policy under synthetic facial structure, generation artifacts, and distribution shift where the right behavior is usually abstention rather than confident approval.
+
+![DeepFakeFace examples](reports/galleries/deepfakeface_examples.jpg)
+
+The `iCartoonFace` overview below makes the cartoon robustness domain concrete. It shows the broad style spread inside the source itself, from Western cartoons to anime-like renderings and monochrome manga panels. That is exactly why this source is useful for abstention testing: it widens the visual regime far beyond the real-photo supervision used for the shipped checkpoint.
+
+![iCartoonFace overview](reports/galleries/icartoonface_examples.png)
 
 Scaffolded for future robustness expansion:
 
