@@ -6,6 +6,54 @@
     "expected_behavior": "Usually safe unless the policy decides the face is ambiguous or low quality."
   },
   {
+    "filename": "adult_face_2.jpg",
+    "category": "adult_face",
+    "description": "Single-face adult example",
+    "expected_behavior": "Usually safe unless the policy decides the face is ambiguous or low quality."
+  },
+  {
+    "filename": "adult_face_3.jpg",
+    "category": "adult_face",
+    "description": "Single-face adult example",
+    "expected_behavior": "Usually safe unless the policy decides the face is ambiguous or low quality."
+  },
+  {
+    "filename": "adult_face_4.jpg",
+    "category": "adult_face",
+    "description": "Single-face adult example",
+    "expected_behavior": "Usually safe unless the policy decides the face is ambiguous or low quality."
+  },
+  {
+    "filename": "adult_face_5.jpg",
+    "category": "adult_face",
+    "description": "Single-face adult example",
+    "expected_behavior": "Usually safe unless the policy decides the face is ambiguous or low quality."
+  },
+  {
+    "filename": "adult_face_6.jpg",
+    "category": "adult_face",
+    "description": "Single-face adult example",
+    "expected_behavior": "Usually safe unless the policy decides the face is ambiguous or low quality."
+  },
+  {
+    "filename": "adult_face_7.jpg",
+    "category": "adult_face",
+    "description": "Single-face adult example",
+    "expected_behavior": "Usually safe unless the policy decides the face is ambiguous or low quality."
+  },
+  {
+    "filename": "adult_face_8.jpg",
+    "category": "adult_face",
+    "description": "Single-face adult example",
+    "expected_behavior": "Usually safe unless the policy decides the face is ambiguous or low quality."
+  },
+  {
+    "filename": "adult_face_9.jpg",
+    "category": "adult_face",
+    "description": "Single-face adult example",
+    "expected_behavior": "Usually safe unless the policy decides the face is ambiguous or low quality."
+  },
+  {
     "filename": "minor_face_1.jpg",
     "category": "minor_face",
     "description": "Single-face younger-looking example",
@@ -34,6 +82,12 @@
     "category": "ai_generated_minor_face",
     "description": "AI-generated younger-looking face example",
     "expected_behavior": "Usually uncertain or flagged, but should rarely be safe."
+  },
+  {
+    "filename": "adult_face_AI.jpg",
+    "category": "ai_generated_adult_face",
+    "description": "AI-generated adult-looking face example",
+    "expected_behavior": "Usually uncertain or safe, but should be reviewed alongside the real adult samples."
   },
   {
     "filename": "multi_face_1.jpg",
