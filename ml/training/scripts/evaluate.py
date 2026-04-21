@@ -58,6 +58,7 @@ def export_policy(config: dict, exported_dir: Path) -> None:
     policy_payload = {
         "safe_threshold": config["policy"]["safe_threshold"],
         "flagged_threshold": config["policy"]["flagged_threshold"],
+        "adult_safe_age_lower_bound": config["policy"]["adult_safe_age_lower_bound"],
         "minimum_face_confidence": config["policy"]["minimum_face_confidence"],
         "low_face_area_threshold": config["policy"]["low_face_area_threshold"],
         "max_conflict_score": config["policy"]["max_conflict_score"],

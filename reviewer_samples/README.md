@@ -25,9 +25,10 @@ The script will:
 
 Expected high-level behavior by category:
 
-- `adult_face_*`: usually `safe`, sometimes `uncertain` if quality or boundary cues are weak
+- `adult_face_*`: usually `safe`, with occasional `uncertain` on weaker boundary cases
 - `minor_face_*`: usually `flagged`
 - `ai_generated_minor_face`: usually `uncertain` or `flagged`, rarely `safe`
+- `ai_generated_adult_face`: currently may return `safe` if the auxiliary domain head treats it as `real`
 - `cartoon_face_*`: usually `uncertain`
 - `anime_face_*`: usually `uncertain`
 - `no_face_*`: should be `uncertain`

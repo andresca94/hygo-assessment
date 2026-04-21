@@ -164,6 +164,7 @@ Sampling should oversample hard slices instead of maximizing raw volume.
 - age labels in public datasets are not legal ground truth
 - demographic fields depend on source availability and should be treated cautiously
 - the shipped `FairFace` test split only includes labeled minors in the `0-12` bucket, so demographic subgroup analysis for the shipped checkpoint does not fully cover borderline `13-17` behavior
+- the auxiliary domain head can still misclassify some AI-generated adult-looking faces as `real`, so synthetic-adult abstention is not yet as reliable as the real-photo adult policy
 
 ## Safety note
 

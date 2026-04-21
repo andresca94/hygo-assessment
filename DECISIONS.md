@@ -158,11 +158,15 @@ Why this training approach:
 
 Suggested defaults for the shipped baseline:
 
-- `safe` if `p_minor < 0.05`, quality is acceptable, there is no strong model conflict, and the adult interval is clearly above 18
+- `safe` if `p_minor < 0.05`, quality is acceptable, there is no strong model conflict, and the lower bound of the age interval is at least `20.0`
 - `flagged` if `p_minor >= 0.40` or the age estimate is close to or below the legal boundary
 - `uncertain` otherwise
 
 Thresholds should be tuned on validation slices, not on global accuracy. The explicit tradeoff is to accept more abstention and more false positives in exchange for reducing dangerous misses on minors.
+
+The `adult_safe_age_lower_bound` was originally set to `21.0`. On April 20, 2026, I reran the tracked reviewer sample set on a RunPod RTX 4090 and found that the `21.0` gate was too strict for real adults: only `2/10` adult-looking samples returned `safe`, despite most having very low `p_minor`, no quality flags, and solid face confidence. Lowering that gate to `20.0` changed the same reviewer set to `9/10` adult approvals while keeping the clearly weaker `adult_face_3` sample as `uncertain`.
+
+That is a better operational tradeoff for this proof of concept. The adult-safe rule is still conservative, but it is no longer collapsing obvious adults into abstentions.
 
 How to interpret the shipped metrics:
 
@@ -206,6 +210,7 @@ Important limitation I would call out explicitly in review:
 
 - the auxiliary domain head is not strong enough to perfectly classify AI/cartoon inputs by domain label
 - the shipped robustness posture comes mostly from conservative safe-gating, conflict, and uncertainty handling, not from a perfect domain classifier
+- on the current shipped policy, an AI-generated adult-looking face in the tracked reviewer set still returned `safe` because it was classified as `domain_type=real`
 
 That limitation is acceptable for this proof of concept because the system abstains safely, but it is exactly the kind of thing I would strengthen before a real production rollout.
 

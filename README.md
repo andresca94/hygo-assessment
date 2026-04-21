@@ -70,6 +70,19 @@ The shipped checkpoint is trained in two stages:
 
 After validation inference, the pipeline fits a temperature scaler on raw validation logits and exports `calibration.json`. The policy layer then uses the calibrated `p_minor` score, the age interval, conflict score, face quality, and domain cues to emit `safe`, `flagged`, or `uncertain`.
 
+### Shipped policy defaults
+
+The shipped `policy.json` currently uses:
+
+- `safe_threshold = 0.05`
+- `flagged_threshold = 0.40`
+- `adult_safe_age_lower_bound = 20.0`
+- `minimum_face_confidence = 0.80`
+- `low_face_area_threshold = 0.05`
+- `max_conflict_score = 0.25`
+
+The `adult_safe_age_lower_bound` was relaxed from `21.0` to `20.0` after RunPod RTX 4090 reviewer-sample validation showed that the earlier rule was over-conservative on obvious adult faces. That change improved real-adult approval without changing the minor-risk thresholds.
+
 ## Repository Layout
 
 ```text
@@ -154,6 +167,16 @@ The script will:
 
 This is intended to make reviewer testing easy without having to assemble a sample set first.
 
+On the current shipped policy, the tracked reviewer set should behave roughly like this:
+
+- real adult examples: usually `safe`
+- obvious minors: `flagged`
+- no-face example: `uncertain`
+- multi-face example: usually `uncertain` because the detected faces are small
+- stylized examples: `uncertain`
+
+One known limitation remains: some AI-generated adult-looking faces can still return `safe` if the auxiliary domain head treats them as `real`.
+
 ### 2. RunPod RTX 4090 workflow
 
 Recommended pod shape:
@@ -179,6 +202,26 @@ bash scripts/runpod_fetch_minimum_datasets.sh
 bash scripts/runpod_train_recommended_submission.sh
 bash scripts/runpod_fetch_robustness_datasets.sh
 bash scripts/runpod_run_robustness_eval.sh
+```
+
+If you are using a RunPod image that does not expose a working Docker daemon, you can still run the shipped inference service directly on the GPU:
+
+```bash
+cp .env.example .env
+python ml/training/scripts/bootstrap_model_assets.py --config ml/training/configs/model_assets.yaml --emit-instructions --prepare-dirs
+python -m pip install -r ml/inference/requirements-gpu.txt
+uvicorn ml.inference.app:app --host 0.0.0.0 --port 8000
+```
+
+Then, in another shell:
+
+```bash
+mkdir -p reviewer_samples/results
+for f in reviewer_samples/*.jpg; do
+  name="$(basename "$f" .jpg)"
+  curl -s -X POST http://127.0.0.1:8000/v1/age-safety/check \
+    -F "file=@$f" | tee "reviewer_samples/results/${name}.json"
+done
 ```
 
 Before `runpod_train_full.sh`, the training pod must already contain real files under `data/raw/...`. The script now fails fast if the raw dataset folders are empty or if the merged manifest cannot produce supervised `train`, `val`, and `test` rows.

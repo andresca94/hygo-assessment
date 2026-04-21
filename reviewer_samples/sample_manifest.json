@@ -87,7 +87,7 @@
     "filename": "adult_face_AI.jpg",
     "category": "ai_generated_adult_face",
     "description": "AI-generated adult-looking face example",
-    "expected_behavior": "Usually uncertain or safe, but should be reviewed alongside the real adult samples."
+    "expected_behavior": "Can return safe on the current shipped policy if the auxiliary domain head treats it as real; this is a known limitation."
   },
   {
     "filename": "multi_face_1.jpg",
